@@ -1,26 +1,51 @@
 use wgpu::util::DeviceExt;
 
+use crate::cpu::ppu::DisplayMatrix;
+
 use super::*;
 
+/// The GameBoy's 160x144 display has 23040 pixels that can
+/// display 4 colors (represented in two bits).
+/// This requires 46080 bits which fit into 1440 unsigned 32-bit integers.
+const DISPLAY_UNIFORM_SIZE: usize = (2 * WIDTH * HEIGHT) / 32;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct PixelUniform {
-    // The GameBoy's 160x144 display has 23040 pixels that can
-    // display 4 colors (represented in two bits).
-    // This requires 46080 bits which fit into 1440 unsigned 32-bit integers.
-    pub pixels: [u32; 1440],
+// Uniform of display data
+struct DisplayUniform {
+    pub pixels: [u32; DISPLAY_UNIFORM_SIZE],
 }
 
-impl PixelUniform {
+impl DisplayUniform {
     fn new() -> Self {
-        let mut pixels = [0; 1440];
-        pixels[0] = 0b1111000011001111;
-        Self { pixels }
+        Self {
+            pixels: [0; DISPLAY_UNIFORM_SIZE],
+        }
+    }
+
+    /// Transforms the PPU's d isplay matrix into data to be sent and interpreted on the GPU
+    fn update(&mut self, display: &DisplayMatrix) {
+        let mut i = 0;
+        let mut int_i = 0;
+        self.pixels[i] = 0;
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                let pixel = display[x][y] as u32;
+                self.pixels[i] |= pixel << int_i;
+                int_i += 2;
+                if int_i >= 32 {
+                    int_i = 0;
+                    i += 1;
+                    if i >= DISPLAY_UNIFORM_SIZE {
+                        return;
+                    }
+                    self.pixels[i] = 0;
+                }
+            }
+        }
     }
 }
 
-// This will store the state of our game
-pub struct State {
+pub struct Renderer {
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -29,12 +54,12 @@ pub struct State {
     pub render_pipeline: wgpu::RenderPipeline,
     pub window: Arc<Window>,
 
-    pixel_uniform: PixelUniform,
-    pixel_buffer: wgpu::Buffer,
-    pixel_bind_group: wgpu::BindGroup,
+    display_uniform: DisplayUniform,
+    display_buffer: wgpu::Buffer,
+    display_bind_group: wgpu::BindGroup,
 }
 
-impl State {
+impl Renderer {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
@@ -89,13 +114,14 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-        let pixel_uniform = PixelUniform::new();
-        let pixel_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Pixel Buffer"),
-            contents: bytemuck::cast_slice(&[pixel_uniform]),
+        // Initialize display data for the GPU
+        let display_uniform = DisplayUniform::new();
+        let display_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Display Buffer"),
+            contents: bytemuck::cast_slice(&[display_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let pixel_bind_group_layout =
+        let display_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -107,26 +133,25 @@ impl State {
                     },
                     count: None,
                 }],
-                label: Some("pixel_bind_group_layout"),
+                label: Some("Display Bind Group Layout"),
             });
-
-        let pixel_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &pixel_bind_group_layout,
+        let display_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &display_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: pixel_buffer.as_entire_binding(),
+                resource: display_buffer.as_entire_binding(),
             }],
-            label: Some("pixel_bind_group"),
+            label: Some("Display Bind Group"),
         });
 
+        // Initialize render pipeline
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&pixel_bind_group_layout],
+                bind_group_layouts: &[&display_bind_group_layout],
                 push_constant_ranges: &[],
             });
-
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -151,11 +176,8 @@ impl State {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: None,
@@ -177,9 +199,9 @@ impl State {
             render_pipeline,
             window,
 
-            pixel_uniform,
-            pixel_buffer,
-            pixel_bind_group,
+            display_uniform,
+            display_buffer,
+            display_bind_group,
         })
     }
 
@@ -198,6 +220,15 @@ impl State {
             (KeyCode::Escape, true) => event_loop.exit(),
             _ => {}
         }
+    }
+
+    pub fn update_display(&mut self, display: &DisplayMatrix) {
+        self.display_uniform.update(display);
+        self.queue.write_buffer(
+            &self.display_buffer,
+            0,
+            bytemuck::cast_slice(&[self.display_uniform]),
+        );
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -238,7 +269,7 @@ impl State {
             timestamp_writes: None,
         });
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.pixel_bind_group, &[]);
+        render_pass.set_bind_group(0, &self.display_bind_group, &[]);
         render_pass.draw(0..6, 0..1);
         drop(render_pass);
 

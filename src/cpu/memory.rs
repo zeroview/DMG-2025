@@ -1,5 +1,4 @@
 use super::*;
-use memmap2::MmapMut;
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy)]
 pub enum MBCType {
@@ -136,7 +135,7 @@ pub struct MBC {
     pub rom: Vec<u8>,
     pub ram: Vec<u8>,
     #[serde(skip_serializing, skip_deserializing)]
-    pub save_ram: Option<MmapMut>,
+    // pub save_ram: Option<MmapMut>,
     rom_bank: u8,
     ram_bank: u8,
     ram_enabled: bool,
@@ -150,7 +149,7 @@ impl MBC {
         Self {
             rom: vec![],
             ram: vec![0; usize::from(0x2000 * info.ram_banks)],
-            save_ram: None,
+            // save_ram: None,
             rom_bank: 1,
             ram_bank: 0,
             ram_enabled: false,
@@ -164,14 +163,14 @@ impl MBC {
         self.rom = rom_file;
     }
 
-    pub fn load_memory_map(&mut self, mut mmap: MmapMut, overwrite_mmap: bool) {
-        if overwrite_mmap {
-            mmap.clone_from_slice(&self.ram);
-        } else {
-            self.ram = mmap.to_vec();
-        }
-        self.save_ram = Some(mmap);
-    }
+    // pub fn load_memory_map(&mut self, mut mmap: MmapMut, overwrite_mmap: bool) {
+    //     if overwrite_mmap {
+    //         mmap.clone_from_slice(&self.ram);
+    //     } else {
+    //         self.ram = mmap.to_vec();
+    //     }
+    //     self.save_ram = Some(mmap);
+    // }
 
     /// Returns value from memory at address
     /// Should handle addresses between $0000-$7FFF and $A000-$BFFF
@@ -326,9 +325,9 @@ impl MBC {
                     return;
                 }
                 self.ram[address] = value;
-                if let Some(mmap) = self.save_ram.as_deref_mut() {
-                    mmap[address] = value;
-                }
+                // if let Some(mmap) = self.save_ram.as_deref_mut() {
+                //     mmap[address] = value;
+                // }
             }
             _ => {}
         };
@@ -410,9 +409,9 @@ impl MBC {
                     return;
                 }
                 self.ram[address] = value;
-                if let Some(mmap) = self.save_ram.as_deref_mut() {
-                    mmap[address] = value;
-                }
+                // if let Some(mmap) = self.save_ram.as_deref_mut() {
+                //     mmap[address] = value;
+                // }
             }
             _ => {}
         };

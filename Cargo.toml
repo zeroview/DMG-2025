@@ -31,7 +31,7 @@ web-sys = { version = "0.3", features = [
 
 bytemuck = { version = "1.16", features = [ "derive" ] }
 anyhow = "1.0"
-winit = { version = "0.30", features = ["android-native-activity"] }
+winit = { version = "0.30", features = ["android-native-activity", "serde"] }
 log = "0.4"
 pollster = "0.4"
 

@@ -1,3 +1,5 @@
+use crate::{HEIGHT, WIDTH};
+
 use super::*;
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq)]
@@ -99,10 +101,10 @@ pub struct DMGPalettes {
     obj1: u8,
 }
 
-pub type DisplayMatrix = [[u8; 144]; 160];
+pub type DisplayMatrix = [[u8; HEIGHT]; WIDTH];
 
 fn empty_display() -> DisplayMatrix {
-    [[0; 144]; 160]
+    [[0; HEIGHT]; WIDTH]
 }
 
 /// The graphics processing unit

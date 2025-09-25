@@ -7,42 +7,57 @@ pub use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
-mod state;
-use state::*;
+mod renderer;
+use renderer::*;
+mod cpu;
+use cpu::*;
+mod options;
+use options::*;
+
+const CANVAS_ID: &str = "canvas";
+pub const WIDTH: usize = 160;
+pub const HEIGHT: usize = 144;
 
 #[wasm_bindgen]
 pub fn run() -> Result<(), wasm_bindgen::JsValue> {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap_throw();
 
+    let rom = include_bytes!("../roms/test.gb");
+
     let event_loop = EventLoop::with_user_event().build().unwrap_throw();
-    let mut app = App::new(&event_loop);
+    let mut app = App::new(&event_loop, rom.to_vec());
     event_loop.run_app(&mut app).unwrap_throw();
 
     Ok(())
 }
 
 pub struct App {
-    proxy: Option<winit::event_loop::EventLoopProxy<State>>,
-    state: Option<State>,
+    proxy: Option<winit::event_loop::EventLoopProxy<Renderer>>,
+    renderer: Option<Renderer>,
+    cpu: CPU,
 }
 
 impl App {
-    pub fn new(event_loop: &EventLoop<State>) -> Self {
+    pub fn new(event_loop: &EventLoop<Renderer>, rom: Vec<u8>) -> Self {
+        let options = Options::default();
+        let cpu = CPU::new(rom, &options);
         let proxy = Some(event_loop.create_proxy());
-        Self { state: None, proxy }
+        Self {
+            proxy,
+            renderer: None,
+            cpu,
+        }
     }
 }
 
-impl ApplicationHandler<State> for App {
+impl ApplicationHandler<Renderer> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
 
         use wasm_bindgen::JsCast;
         use winit::platform::web::WindowAttributesExtWebSys;
-
-        const CANVAS_ID: &str = "canvas";
 
         let window = wgpu::web_sys::window().unwrap_throw();
         let document = window.document().unwrap_throw();
@@ -56,15 +71,13 @@ impl ApplicationHandler<State> for App {
         // proxy to send the results to the event loop
         if let Some(proxy) = self.proxy.take() {
             wasm_bindgen_futures::spawn_local(async move {
-                assert!(
-                    proxy
-                        .send_event(
-                            State::new(window)
-                                .await
-                                .expect("Unable to create canvas!!!")
-                        )
-                        .is_ok()
-                )
+                assert!(proxy
+                    .send_event(
+                        Renderer::new(window)
+                            .await
+                            .expect("Unable to create canvas!!!")
+                    )
+                    .is_ok())
             });
         }
     }
@@ -75,21 +88,28 @@ impl ApplicationHandler<State> for App {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let state = match &mut self.state {
-            Some(canvas) => canvas,
-            None => return,
-        };
+        if self.renderer.is_none() {
+            return;
+        }
+        let (renderer, cpu) = (self.renderer.as_mut().unwrap(), &mut self.cpu);
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => state.resize(size.width, size.height),
+            WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                match state.render() {
+                loop {
+                    if cpu.execute() {
+                        break;
+                    }
+                }
+                renderer.update_display(&cpu.ppu.display);
+
+                match renderer.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        let size = state.window.inner_size();
-                        state.resize(size.width, size.height);
+                        let size = renderer.window.inner_size();
+                        renderer.resize(size.width, size.height);
                     }
                     Err(e) => {
                         log::error!("Unable to render {}", e);
@@ -104,21 +124,19 @@ impl ApplicationHandler<State> for App {
                         ..
                     },
                 ..
-            } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            } => renderer.handle_key(event_loop, code, key_state.is_pressed()),
             _ => {}
         }
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: Renderer) {
         // This is where proxy.send_event() ends up
         event.window.request_redraw();
         event.resize(
             event.window.inner_size().width,
             event.window.inner_size().height,
         );
-        self.state = Some(event);
+        self.renderer = Some(event);
     }
-
-    // ...
 }

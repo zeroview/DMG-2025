@@ -1,48 +1,47 @@
-use egui::{Color32, Key};
-use serde::{de::Visitor, ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::{fs, io::Write};
-
 use crate::cpu::input::InputFlag;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use winit::keyboard::KeyCode;
 
-#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Deserialize, Serialize, bytemuck::Pod, bytemuck::Zeroable,
+)]
+pub struct Color {
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+}
+impl Color {
+    pub fn new(r: f32, g: f32, b: f32) -> Self {
+        Self { r, g, b, a: 1.0 }
+    }
+}
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 /// Represents color palette for display
-pub struct Palette(pub Color32, pub Color32, pub Color32, pub Color32);
+pub struct Palette(pub Color, pub Color, pub Color, pub Color);
 
 impl Palette {
     pub fn original() -> Self {
         Self(
-            Color32::WHITE,
-            Color32::GRAY,
-            Color32::DARK_GRAY,
-            Color32::BLACK,
+            Color::new(1.0, 1.0, 1.0),
+            Color::new(0.6666, 0.6666, 0.6666),
+            Color::new(0.3333, 0.3333, 0.3333),
+            Color::new(0.0000, 0.0000, 0.0000),
         )
     }
 
     pub fn lcd() -> Self {
         Self(
-            Color32::from_rgb(224, 248, 208),
-            Color32::from_rgb(136, 192, 112),
-            Color32::from_rgb(52, 104, 86),
-            Color32::from_rgb(8, 24, 32),
+            Color::new(0.8784, 0.9725, 0.8156),
+            Color::new(0.5333, 0.7529, 0.4392),
+            Color::new(0.2039, 0.4078, 0.3372),
+            Color::new(0.0313, 0.0941, 0.1254),
         )
     }
 
-    fn color_from_hex(hex: String) -> Color32 {
-        Color32::from_hex(&hex).expect("Hex string not valid!")
-    }
-
-    pub fn from_hex(array: [String; 4]) -> Self {
-        Self(
-            Self::color_from_hex(array[0].clone()),
-            Self::color_from_hex(array[1].clone()),
-            Self::color_from_hex(array[2].clone()),
-            Self::color_from_hex(array[3].clone()),
-        )
-    }
-
-    pub fn get_col(&self, index: u8) -> Color32 {
+    pub fn get_col(&self, index: u8) -> Color {
         match index {
             0 => self.0,
             1 => self.1,
@@ -52,7 +51,7 @@ impl Palette {
         }
     }
 
-    pub fn get_mut(&mut self, index: u8) -> &mut Color32 {
+    pub fn get_mut(&mut self, index: u8) -> &mut Color {
         match index {
             0 => &mut self.0,
             1 => &mut self.1,
@@ -63,57 +62,9 @@ impl Palette {
     }
 }
 
-impl Serialize for Palette {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(4))?;
-        for i in 0..4 {
-            let _ = seq.serialize_element(&self.get_col(i).to_hex());
-        }
-        seq.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Palette {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_seq(PaletteVisitor)
-    }
-}
-
-struct PaletteVisitor;
-impl<'de> Visitor<'de> for PaletteVisitor {
-    type Value = Palette;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, "an array of 4 hex strings")
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: serde::de::SeqAccess<'de>,
-    {
-        let mut array: [String; 4] = [String::new(), String::new(), String::new(), String::new()];
-        for hex in &mut array {
-            if let Ok(Some(hex_string)) = seq.next_element::<String>() {
-                *hex = hex_string.to_string();
-            } else {
-                return Err(serde::de::Error::custom("Palette hex array not valid!"));
-            }
-        }
-        Ok(Palette::from_hex(array))
-    }
-}
-
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct Options {
-    pub data_path: String,
-    pub rom_path: String,
-    pub keybinds: HashMap<InputFlag, String>,
-    pub window_scale: u8,
+    pub keybinds: HashMap<InputFlag, KeyCode>,
     pub palette_preset: u8,
     pub custom_palette: Palette,
     pub audio_sample_rate: u32,
@@ -122,21 +73,7 @@ pub struct Options {
 
 impl Options {
     pub fn load() -> Self {
-        let options_path = dirs_next::data_dir()
-            .unwrap()
-            .join("DMG-2025")
-            .join("options.json");
-        if !options_path.exists() {
-            return Self::init_default();
-        }
-        let file = fs::read_to_string(options_path).unwrap();
-        let json = serde_json::from_str(&file);
-        if let Ok(options) = json {
-            options
-        } else {
-            eprintln!("Options file outdated or corrupted. Restoring defaults");
-            Self::init_default()
-        }
+        todo!();
     }
 
     fn init_default() -> Self {
@@ -146,34 +83,19 @@ impl Options {
     }
 
     pub fn save(&self) {
-        let default_folder = dirs_next::data_dir().unwrap().join("DMG-2025");
-        if !default_folder.exists() {
-            Self::init_folder(&default_folder);
-        }
-
-        let options_path = default_folder.join("options.json");
-        let _ = fs::remove_file(&options_path);
-
-        let mut file = fs::File::create(&options_path).unwrap();
-        let json = serde_json::to_string_pretty(&self).unwrap();
-        let _ = file.write_all(json.as_bytes());
+        todo!();
     }
 
-    fn init_folder(folder: &PathBuf) {
-        let _ = fs::create_dir(folder);
-        let _ = fs::create_dir(folder.join("saves"));
-    }
-
-    pub fn default_keybinds() -> HashMap<InputFlag, String> {
+    pub fn default_keybinds() -> HashMap<InputFlag, KeyCode> {
         HashMap::from([
-            (InputFlag::RIGHT, Key::ArrowRight.name().to_string()),
-            (InputFlag::LEFT, Key::ArrowLeft.name().to_string()),
-            (InputFlag::UP, Key::ArrowUp.name().to_string()),
-            (InputFlag::DOWN, Key::ArrowDown.name().to_string()),
-            (InputFlag::A, Key::X.name().to_string()),
-            (InputFlag::B, Key::Z.name().to_string()),
-            (InputFlag::SELECT, Key::Backspace.name().to_string()),
-            (InputFlag::START, Key::Enter.name().to_string()),
+            (InputFlag::RIGHT, KeyCode::ArrowRight),
+            (InputFlag::LEFT, KeyCode::ArrowLeft),
+            (InputFlag::UP, KeyCode::ArrowUp),
+            (InputFlag::DOWN, KeyCode::ArrowDown),
+            (InputFlag::A, KeyCode::KeyX),
+            (InputFlag::B, KeyCode::KeyZ),
+            (InputFlag::SELECT, KeyCode::Backspace),
+            (InputFlag::START, KeyCode::Enter),
         ])
     }
 }
@@ -181,15 +103,7 @@ impl Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            data_path: dirs_next::data_dir()
-                .unwrap()
-                .join("DMG-2025")
-                .to_str()
-                .unwrap()
-                .into(),
-            rom_path: String::new(),
             keybinds: Self::default_keybinds(),
-            window_scale: 4,
             palette_preset: 0,
             custom_palette: Palette::original(),
             audio_sample_rate: 48000,
