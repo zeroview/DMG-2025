@@ -7,7 +7,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 export default defineConfig({
   build: {
     watch: {
-      include: ["src/**/*.ts", "src/**/*.svelte", " src/**/*.rs"],
+      include: ["src/**/*.ts", "src/**/*.svelte", "src/**/*.rs"],
     },
   },
   plugins: [svelte(), wasmPackWatchPlugin(), wasm(), topLevelAwait()],

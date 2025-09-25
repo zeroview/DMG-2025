@@ -1,12 +1,33 @@
 use wgpu::util::DeviceExt;
 
+use super::*;
 use crate::cpu::ppu::DisplayMatrix;
 
-use super::*;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct OptionsUniform {
+    palette: Palette,
+    width: u32,
+    height: u32,
+    canvas_width: u32,
+    canvas_height: u32,
+}
+
+impl OptionsUniform {
+    fn new() -> Self {
+        Self {
+            palette: Palette::lcd(),
+            width: WIDTH as u32,
+            height: HEIGHT as u32,
+            canvas_width: 0,
+            canvas_height: 0,
+        }
+    }
+}
 
 /// The GameBoy's 160x144 display has 23040 pixels that can
 /// display 4 colors (represented in two bits).
-/// This requires 46080 bits which fit into 1440 unsigned 32-bit integers.
+/// This requires 46080 bits whic h fit into 1440 unsigned 32-bit integers.
 const DISPLAY_UNIFORM_SIZE: usize = (2 * WIDTH * HEIGHT) / 32;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -22,7 +43,7 @@ impl DisplayUniform {
         }
     }
 
-    /// Transforms the PPU's d isplay matrix into data to be sent and interpreted on the GPU
+    /// Transforms the PPU's display matrix into data to be sent and interpreted on the GPU
     fn update(&mut self, display: &DisplayMatrix) {
         let mut i = 0;
         let mut int_i = 0;
@@ -54,12 +75,53 @@ pub struct Renderer {
     pub render_pipeline: wgpu::RenderPipeline,
     pub window: Arc<Window>,
 
+    options_uniform: OptionsUniform,
+    options_buffer: wgpu::Buffer,
+    options_bind_group: wgpu::BindGroup,
+
     display_uniform: DisplayUniform,
     display_buffer: wgpu::Buffer,
     display_bind_group: wgpu::BindGroup,
 }
 
 impl Renderer {
+    fn init_uniform<U>(
+        device: &wgpu::Device,
+        uniform: U,
+        name: &str,
+    ) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup)
+    where
+        U: bytemuck::NoUninit,
+    {
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{name} Buffer")),
+            contents: bytemuck::cast_slice(&[uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(&format!("{name} Bind Group Layout")),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("{name} Bind Group")),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        (buffer, bind_group_layout, bind_group)
+    }
+
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
@@ -114,42 +176,22 @@ impl Renderer {
             desired_maximum_frame_latency: 2,
         };
 
+        // Initialize options uniform for the GPU
+        let options_uniform = OptionsUniform::new();
+        let (options_buffer, options_bind_group_layout, options_bind_group) =
+            Self::init_uniform(&device, options_uniform, "Options");
+
         // Initialize display data for the GPU
         let display_uniform = DisplayUniform::new();
-        let display_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Display Buffer"),
-            contents: bytemuck::cast_slice(&[display_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let display_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("Display Bind Group Layout"),
-            });
-        let display_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &display_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: display_buffer.as_entire_binding(),
-            }],
-            label: Some("Display Bind Group"),
-        });
+        let (display_buffer, display_bind_group_layout, display_bind_group) =
+            Self::init_uniform(&device, display_uniform, "Display");
 
         // Initialize render pipeline
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&display_bind_group_layout],
+                bind_group_layouts: &[&options_bind_group_layout, &display_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -199,6 +241,10 @@ impl Renderer {
             render_pipeline,
             window,
 
+            options_uniform,
+            options_buffer,
+            options_bind_group,
+
             display_uniform,
             display_buffer,
             display_bind_group,
@@ -211,14 +257,6 @@ impl Renderer {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
-        }
-    }
-
-    pub fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        #[allow(clippy::single_match)]
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            _ => {}
         }
     }
 
@@ -269,7 +307,9 @@ impl Renderer {
             timestamp_writes: None,
         });
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.display_bind_group, &[]);
+
+        render_pass.set_bind_group(0, &self.options_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.display_bind_group, &[]);
         render_pass.draw(0..6, 0..1);
         drop(render_pass);
 

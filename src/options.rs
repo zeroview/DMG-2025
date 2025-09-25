@@ -18,7 +18,11 @@ impl Color {
         Self { r, g, b, a: 1.0 }
     }
 }
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+
+#[repr(C)]
+#[derive(
+    Debug, Copy, Clone, Deserialize, Serialize, PartialEq, bytemuck::Pod, bytemuck::Zeroable,
+)]
 /// Represents color palette for display
 pub struct Palette(pub Color, pub Color, pub Color, pub Color);
 
@@ -37,7 +41,7 @@ impl Palette {
             Color::new(0.8784, 0.9725, 0.8156),
             Color::new(0.5333, 0.7529, 0.4392),
             Color::new(0.2039, 0.4078, 0.3372),
-            Color::new(0.0313, 0.0941, 0.1254),
+            Color::new(0.0156, 0.0470, 0.0627),
         )
     }
 

@@ -10,6 +10,7 @@ pub use winit::{
 mod renderer;
 use renderer::*;
 mod cpu;
+use cpu::input::InputFlag;
 use cpu::*;
 mod options;
 use options::*;
@@ -34,7 +35,9 @@ pub fn run() -> Result<(), wasm_bindgen::JsValue> {
 
 pub struct App {
     proxy: Option<winit::event_loop::EventLoopProxy<Renderer>>,
+    options: Options,
     renderer: Option<Renderer>,
+    input_state: InputFlag,
     cpu: CPU,
 }
 
@@ -45,7 +48,9 @@ impl App {
         let proxy = Some(event_loop.create_proxy());
         Self {
             proxy,
+            options,
             renderer: None,
+            input_state: InputFlag::from_bits_truncate(0xFF),
             cpu,
         }
     }
@@ -75,7 +80,7 @@ impl ApplicationHandler<Renderer> for App {
                     .send_event(
                         Renderer::new(window)
                             .await
-                            .expect("Unable to create canvas!!!")
+                            .expect("Unable to create canvas")
                     )
                     .is_ok())
             });
@@ -97,6 +102,8 @@ impl ApplicationHandler<Renderer> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
+                cpu.update_input(&self.input_state);
+
                 loop {
                     if cpu.execute() {
                         break;
@@ -124,7 +131,13 @@ impl ApplicationHandler<Renderer> for App {
                         ..
                     },
                 ..
-            } => renderer.handle_key(event_loop, code, key_state.is_pressed()),
+            } => {
+                for (input, key) in &self.options.keybinds {
+                    if code == *key {
+                        self.input_state.set(*input, !key_state.is_pressed());
+                    }
+                }
+            }
             _ => {}
         }
     }

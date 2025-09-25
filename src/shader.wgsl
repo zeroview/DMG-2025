@@ -1,3 +1,14 @@
+struct OptionsUniform {
+  palette: array<vec4<f32>, 4>,
+  width: u32,
+  height: u32,
+  canvas_width: u32,
+  canvas_height: u32
+}
+
+@group(0) @binding(0)
+var<uniform> options: OptionsUniform;
+
 // Contains the display pixel data for rendering.
 // Structured as an array of 4D vectors to
 // satisfy the memory alignment system
@@ -5,7 +16,7 @@ struct PixelUniform {
   pixels: array<vec4<u32>, 360>
 };
 
-@group(0) @binding(0)
+@group(1) @binding(0)
 var<uniform> pixels: PixelUniform;
 
 @vertex
@@ -47,11 +58,6 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     var int_col_i = ((vec_bit_i % 32) / 2) * 2;
     
     var color = int >> int_col_i & 3;
-    if color == 0 {
-      return vec4f(1.0, 1.0, 1.0, 1.0);
-    }
-    else {
-      return vec4f(0.0, 0.0, 0.0, 1.0);
-    }
+    return options.palette[color];
 }
 
