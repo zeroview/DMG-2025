@@ -44,7 +44,7 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     var x = u32(pos.x / scale);
     var y = u32(pos.y / scale);
     // Make outside pixels black
-    if x > width || y > height {
+    if x >= width || y >= height {
       return vec4f(0.0, 0.0, 0.0, 1.0);
     }
     
