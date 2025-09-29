@@ -26,6 +26,11 @@
     "vite-plugin-wasm": "^3.5.0",
     "vite-plugin-wasm-pack-watcher": "^1.0.1"
   },
+  "overrides": {
+    "vite-plugin-wasm-pack-watcher": {
+      "vite": "^7.1.7"
+    }
+  },
   "dependencies": {
     "DMG-2025": "file:pkg"
   }
