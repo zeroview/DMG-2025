@@ -5,7 +5,21 @@
 
   function run_emulator() {
     started = true;
-    run();
+
+    let proxy = run();
+    proxy.send("hell");
+
+    let lastTime = performance.now();
+    function frame() {
+      let currentTime = performance.now();
+      let millis = Math.max(0, currentTime - lastTime);
+      console.log(millis);
+      lastTime = currentTime;
+
+      proxy.run_cpu(millis);
+      window.requestAnimationFrame(frame);
+    }
+    window.requestAnimationFrame(frame);
   }
 </script>
 

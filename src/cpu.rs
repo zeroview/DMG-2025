@@ -33,6 +33,8 @@ pub struct CPU {
     pub input: InputReg,
     pub istate: InterruptState,
     pub halt: bool,
+    pub frame_counter: u8,
+    cycle_counter: u32,
 }
 
 impl CPU {
@@ -46,11 +48,25 @@ impl CPU {
             input: InputReg::new(),
             istate: InterruptState::new(),
             halt: false,
+            frame_counter: 0,
+            cycle_counter: 0,
         }
     }
 
+    const MS_PER_M_CYCLE: f32 = 0.00095367431640625;
+
+    /// Runs Game Boy for given amount of milliseconds
+    pub fn run(&mut self, millis: f32) {
+        let target_cycles = (millis / Self::MS_PER_M_CYCLE).floor() as u32;
+        while self.cycle_counter < target_cycles {
+            self.run_instruction();
+        }
+        self.cycle_counter = 0;
+    }
+
     /// Emulates the rest of the Game Boy (apart from instructions) for given amount of M-cycles
-    pub fn cycle(&mut self, cycles: u8) {
+    fn cycle(&mut self, cycles: u32) {
+        self.cycle_counter += cycles;
         // Rest of the system runs on T-cycles, which is 1/4 of an M-cycle
         for _ in 0..(4 * cycles) {
             // Check if OAM DMA should be started
@@ -73,7 +89,7 @@ impl CPU {
     /// Executes the next instruction at program counter.
     /// Ticks the rest of the system at correct points between the execution of instructions.
     /// Returns whether or not the system hit VBlank during execution
-    pub fn execute(&mut self) -> bool {
+    pub fn run_instruction(&mut self) {
         let start_vblank = self.ppu.mode == 1;
         // Check for possible interrupt requests
         self.check_for_interrupt();
@@ -82,13 +98,18 @@ impl CPU {
             // CPU doesn't execute anything when HALTed,
             // so just cycle the system forward until HALT is lifted
             self.cycle(1);
-
-            // Check current PPU mode and return true
-            // if it was changed to VBlank during execution
-            let end_vblank = self.ppu.mode == 1;
-            return !start_vblank && end_vblank;
+        } else {
+            self.run_opcode();
         }
 
+        // Increment frame coutner if system hit VBlank during execution
+        let end_vblank = self.ppu.mode == 1;
+        if !start_vblank && end_vblank {
+            self.frame_counter = self.frame_counter.wrapping_add(1);
+        }
+    }
+
+    fn run_opcode(&mut self) {
         let opcode = self.read(self.reg.pc);
         let mut increment_pc = true;
         {
@@ -571,11 +592,6 @@ impl CPU {
         }
         // Every instruction takes at least one M-cycle to execute
         self.cycle(1);
-
-        // Check current PPU mode and return true
-        // if it was changed to VBlank during execution
-        let end_vblank = self.ppu.mode == 1;
-        !start_vblank && end_vblank
     }
 
     /// Executes the 16-bit long arithmetic opcodes that start with 0xCB
