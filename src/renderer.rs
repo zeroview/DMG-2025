@@ -85,7 +85,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    fn init_uniform<U>(
+    fn init_uniform_buffer<U>(
         device: &wgpu::Device,
         uniform: U,
         name: &str,
@@ -102,7 +102,7 @@ impl Renderer {
             label: Some(&format!("{name} Bind Group Layout")),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -176,12 +176,12 @@ impl Renderer {
         // Initialize options uniform for the GPU
         let options_uniform = OptionsUniform::new();
         let (options_buffer, options_bind_group_layout, options_bind_group) =
-            Self::init_uniform(&device, options_uniform, "Options");
+            Self::init_uniform_buffer(&device, options_uniform, "Options");
 
         // Initialize display data for the GPU
         let display_uniform = DisplayUniform::new();
         let (display_buffer, display_bind_group_layout, display_bind_group) =
-            Self::init_uniform(&device, display_uniform, "Display");
+            Self::init_uniform_buffer(&device, display_uniform, "Display");
 
         // Initialize render pipeline
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
@@ -254,6 +254,14 @@ impl Renderer {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+
+            self.options_uniform.canvas_width = width;
+            self.options_uniform.canvas_height = height;
+            self.queue.write_buffer(
+                &self.options_buffer,
+                0,
+                bytemuck::cast_slice(&[self.options_uniform]),
+            );
         }
     }
 
@@ -291,9 +299,9 @@ impl Renderer {
                 depth_slice: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
                         a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
