@@ -7,7 +7,7 @@
     started = true;
 
     let proxy = run();
-    proxy.send("hell");
+    proxy.test("hello from JS");
 
     let lastTime = performance.now();
     function frame() {

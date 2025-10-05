@@ -534,16 +534,16 @@ impl APU {
         if self.last_div_bit && !div_bit {
             self.div_apu = self.div_apu.wrapping_add(1);
             // Update length timers at 256hz (every 2 ticks)
-            if self.div_apu % 2 == 0 {
+            if self.div_apu.is_multiple_of(2) {
                 self.square_channel_1.update_length_timer();
                 self.square_channel_2.update_length_timer();
                 self.wave_channel.update_length_timer();
                 self.noise_channel.update_length_timer();
                 // Update CH1 period sweep at 128hz (every 4 ticks)
-                if self.div_apu % 4 == 0 {
+                if self.div_apu.is_multiple_of(4) {
                     self.square_channel_1.update_sweep();
                     // Update envelopes at 64hz (every 8 ticks)
-                    if self.div_apu % 8 == 0 {
+                    if self.div_apu.is_multiple_of(8) {
                         self.square_channel_1.update_envelope();
                         self.square_channel_2.update_envelope();
                         self.noise_channel.update_envelope();
@@ -555,14 +555,14 @@ impl APU {
 
         self.period_delay_counter = self.period_delay_counter.wrapping_add(1);
         // Update wave channel period every 2 T-cycles
-        if self.period_delay_counter % 2 == 0 {
+        if self.period_delay_counter.is_multiple_of(2) {
             self.wave_channel.update_period();
             // Update square channel period every 4 T-cycles
-            if self.period_delay_counter % 4 == 0 {
+            if self.period_delay_counter.is_multiple_of(4) {
                 self.square_channel_1.update_period();
                 self.square_channel_2.update_period();
                 // Update noise channel frequency every 16 T-cycles
-                if self.period_delay_counter % 16 == 0 {
+                if self.period_delay_counter.is_multiple_of(16) {
                     self.noise_channel.update_lfsr();
                 }
             }

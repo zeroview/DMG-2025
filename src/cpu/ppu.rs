@@ -1,5 +1,3 @@
-use crate::{HEIGHT, WIDTH};
-
 use super::*;
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq)]
@@ -101,10 +99,18 @@ pub struct DMGPalettes {
     obj1: u8,
 }
 
-pub type DisplayMatrix = [[u8; HEIGHT]; WIDTH];
+/// The Game Boy's 160x144 display has 23040 pixels that can
+/// display 4 colors (represented in two bits).
+/// This requires 46080 bits which are represented as 1440 unsigned 32-bit integers.
+pub const DISPLAY_BUFFER_SIZE: usize = (2 * 160 * 144) / 32;
 
-fn empty_display() -> DisplayMatrix {
-    [[0; HEIGHT]; WIDTH]
+/// Buffer representing the Game Boy's display.
+/// Each pixel takes two bits and the integer's least significant bits represent the leftmost
+/// pixels.
+pub type DisplayBuffer = [u32; DISPLAY_BUFFER_SIZE];
+
+fn empty_display() -> DisplayBuffer {
+    [0; DISPLAY_BUFFER_SIZE]
 }
 
 /// The graphics processing unit
@@ -113,7 +119,7 @@ fn empty_display() -> DisplayMatrix {
 pub struct PPU {
     #[serde(skip)]
     #[serde(default = "empty_display")]
-    pub display: DisplayMatrix,
+    pub display: DisplayBuffer,
     #[serde(with = "BigArray")]
     pub vram: [u8; 0x2000],
     pub oam: OAM,
@@ -223,7 +229,10 @@ impl PPU {
 
     /// Saves given color into the display buffer
     fn set_pixel(&mut self, x: u8, y: u8, col: u8) {
-        self.display[x as usize][y as usize] = col;
+        let i = (((y as usize) * 2 * 160) + ((x as usize) * 2)) / 32;
+        let shift = (x % 16) * 2;
+        self.display[i] &= !(0b11 << shift);
+        self.display[i] |= (col as u32) << shift;
     }
 
     /// Returns the tile index from specified tile map at specified coordinates

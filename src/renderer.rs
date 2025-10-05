@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 
 use super::*;
-use crate::cpu::ppu::DisplayMatrix;
+use crate::cpu::ppu::{DisplayBuffer, DISPLAY_BUFFER_SIZE};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -17,55 +17,30 @@ impl OptionsUniform {
     fn new() -> Self {
         Self {
             palette: Palette::lcd(),
-            width: WIDTH as u32,
-            height: HEIGHT as u32,
+            width: 160,
+            height: 144,
             canvas_width: 0,
             canvas_height: 0,
         }
     }
 }
 
-/// The GameBoy's 160x144 display has 23040 pixels that can
-/// display 4 colors (represented in two bits).
-/// This requires 46080 bits whic h fit into 1440 unsigned 32-bit integers.
-const DISPLAY_UNIFORM_SIZE: usize = (2 * WIDTH * HEIGHT) / 32;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 // Uniform of display data
 struct DisplayUniform {
-    pub pixels: [u32; DISPLAY_UNIFORM_SIZE],
+    pub pixels: DisplayBuffer,
 }
 
 impl DisplayUniform {
     fn new() -> Self {
         Self {
-            pixels: [0; DISPLAY_UNIFORM_SIZE],
-        }
-    }
-
-    /// Transforms the PPU's display matrix into data to be sent and interpreted on the GPU
-    fn update(&mut self, display: &DisplayMatrix) {
-        let mut i = 0;
-        let mut int_i = 0;
-        self.pixels[i] = 0;
-        for y in 0..HEIGHT {
-            for x in 0..WIDTH {
-                let pixel = display[x][y] as u32;
-                self.pixels[i] |= pixel << int_i;
-                int_i += 2;
-                if int_i >= 32 {
-                    int_i = 0;
-                    i += 1;
-                    if i >= DISPLAY_UNIFORM_SIZE {
-                        return;
-                    }
-                    self.pixels[i] = 0;
-                }
-            }
+            pixels: [0; DISPLAY_BUFFER_SIZE],
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Renderer {
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
@@ -265,8 +240,8 @@ impl Renderer {
         }
     }
 
-    pub fn update_display(&mut self, display: &DisplayMatrix) {
-        self.display_uniform.update(display);
+    pub fn update_display(&mut self, display: &DisplayBuffer) {
+        self.display_uniform.pixels = *display;
         self.queue.write_buffer(
             &self.display_buffer,
             0,

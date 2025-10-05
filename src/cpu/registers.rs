@@ -20,7 +20,6 @@ pub enum Reg16 {
     DE,
     HL,
     SP,
-    PC,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq)]
@@ -86,7 +85,6 @@ impl Registers {
             Reg16::DE => u16::from_be_bytes([self.d, self.e]),
             Reg16::HL => u16::from_be_bytes([self.h, self.l]),
             Reg16::SP => self.sp,
-            Reg16::PC => self.pc,
         }
     }
 
@@ -126,7 +124,6 @@ impl Registers {
                 self.l = bytes[1];
             }
             Reg16::SP => self.sp = value,
-            Reg16::PC => self.pc = value,
         }
     }
 }

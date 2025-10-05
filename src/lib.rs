@@ -1,11 +1,10 @@
-pub use std::sync::{Arc, Mutex};
-pub use wasm_bindgen::prelude::*;
-use winit::platform::web::PollStrategy;
-pub use winit::{
+use std::sync::Arc;
+use wasm_bindgen::prelude::*;
+use winit::{
     application::ApplicationHandler,
     event::*,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::PhysicalKey,
     window::Window,
 };
 
@@ -20,8 +19,6 @@ mod options;
 use options::*;
 
 const CANVAS_ID: &str = "canvas";
-pub const WIDTH: usize = 160;
-pub const HEIGHT: usize = 144;
 
 #[wasm_bindgen]
 pub fn run() -> Result<Proxy, JsValue> {
@@ -48,15 +45,21 @@ pub struct Proxy {
 
 #[wasm_bindgen]
 impl Proxy {
-    pub fn send(&self, str: String) {
-        self.proxy.send_event(UserEvent::Test(str));
+    fn send(&self, event: UserEvent) {
+        self.proxy
+            .send_event(event)
+            .expect("Couldn't send event to EventLoop");
+    }
+    pub fn test(&self, str: String) {
+        self.send(UserEvent::Test(str));
     }
 
     pub fn run_cpu(&self, millis: f32) {
-        self.proxy.send_event(UserEvent::RunCPU(millis));
+        self.send(UserEvent::RunCPU(millis));
     }
 }
 
+#[derive(Debug)]
 pub enum UserEvent {
     InitRenderer(Box<Renderer>),
     RunCPU(f32),
@@ -130,19 +133,15 @@ impl ApplicationHandler<UserEvent> for App {
         if self.renderer.is_none() {
             return;
         }
-        let (renderer, audio, cpu) = (
-            self.renderer.as_mut().unwrap(),
-            &mut self.audio,
-            &mut self.cpu,
-        );
+        let renderer = self.renderer.as_mut().unwrap();
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                if self.last_cpu_frame != cpu.frame_counter {
-                    renderer.update_display(&cpu.ppu.display);
-                    self.last_cpu_frame = cpu.frame_counter;
+                if self.last_cpu_frame != self.cpu.frame_counter {
+                    renderer.update_display(&self.cpu.ppu.display);
+                    self.last_cpu_frame = self.cpu.frame_counter;
                 }
 
                 match renderer.render() {

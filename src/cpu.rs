@@ -1,7 +1,6 @@
 use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
-use std::ops::RangeInclusive;
 
 pub mod apu;
 pub mod input;
@@ -11,7 +10,6 @@ pub mod ppu;
 pub mod readwrite;
 pub mod registers;
 pub mod timer;
-use super::Options;
 use apu::*;
 use input::*;
 use interrupts::*;
@@ -86,9 +84,8 @@ impl CPU {
         }
     }
 
-    /// Executes the next instruction at program counter.
-    /// Ticks the rest of the system at correct points between the execution of instructions.
-    /// Returns whether or not the system hit VBlank during execution
+    /// Executes the next instruction at program counter,
+    /// ticking the rest of the system too
     pub fn run_instruction(&mut self) {
         let start_vblank = self.ppu.mode == 1;
         // Check for possible interrupt requests
@@ -185,10 +182,10 @@ impl CPU {
                             let reg = Self::get_opcode_reg(2 * (opcode >> 4) + offset);
 
                             let mut val: u8;
-                            if reg.is_none() {
-                                val = self.read(self.reg.read_16(&Reg16::HL))
+                            if let Some(reg8) = reg {
+                                val = self.reg.read(&reg8);
                             } else {
-                                val = self.reg.read(&reg.unwrap())
+                                val = self.read(self.reg.read_16(&Reg16::HL))
                             }
 
                             if nibble == 0x04 || nibble == 0x0C {
@@ -346,11 +343,11 @@ impl CPU {
                 0x40..=0x75 | 0x77..=0xBF => {
                     let reg = Self::get_opcode_reg(opcode);
                     let val: u8;
-                    if reg.is_none() {
+                    if let Some(reg8) = reg {
+                        val = self.reg.read(&reg8);
+                    } else {
                         val = self.read(self.reg.read_16(&Reg16::HL));
                         self.cycle(1);
-                    } else {
-                        val = self.reg.read(&reg.unwrap());
                     }
 
                     match opcode {
