@@ -1,5 +1,6 @@
 pub use std::sync::{Arc, Mutex};
 pub use wasm_bindgen::prelude::*;
+use winit::platform::web::PollStrategy;
 pub use winit::{
     application::ApplicationHandler,
     event::*,
@@ -32,7 +33,7 @@ pub fn run() -> Result<Proxy, JsValue> {
     use winit::platform::web::EventLoopExtWebSys;
 
     let event_loop = EventLoop::with_user_event().build().unwrap_throw();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     let app = App::new(&event_loop, rom.to_vec());
     let proxy = event_loop.create_proxy();
     event_loop.spawn_app(app);
@@ -57,7 +58,7 @@ impl Proxy {
 }
 
 pub enum UserEvent {
-    InitRenderer(Renderer),
+    InitRenderer(Box<Renderer>),
     RunCPU(f32),
     Test(String),
 }
@@ -110,11 +111,11 @@ impl ApplicationHandler<UserEvent> for App {
         if let Some(proxy) = self.proxy.take() {
             wasm_bindgen_futures::spawn_local(async move {
                 assert!(proxy
-                    .send_event(UserEvent::InitRenderer(
+                    .send_event(UserEvent::InitRenderer(Box::new(
                         Renderer::new(window)
                             .await
                             .expect("Unable to create canvas")
-                    ))
+                    )))
                     .is_ok())
             });
         }
@@ -183,7 +184,7 @@ impl ApplicationHandler<UserEvent> for App {
                     renderer.window.inner_size().width,
                     renderer.window.inner_size().height,
                 );
-                self.renderer = Some(renderer);
+                self.renderer = Some(*renderer);
             }
             UserEvent::RunCPU(millis) => {
                 self.cpu.update_input(&self.input_state);

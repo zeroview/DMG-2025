@@ -53,7 +53,7 @@ impl CPU {
         }
     }
 
-    const MS_PER_M_CYCLE: f32 = 0.00095367431640625;
+    const MS_PER_M_CYCLE: f32 = 0.0009536743;
 
     /// Runs Game Boy for given amount of milliseconds
     pub fn run(&mut self, millis: f32) {
