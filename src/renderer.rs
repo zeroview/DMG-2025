@@ -7,8 +7,8 @@ use crate::cpu::{DisplayBuffer, DISPLAY_BUFFER_SIZE};
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct OptionsUniform {
     palette: Palette,
-    width: u32,
-    height: u32,
+    display_width: u32,
+    display_height: u32,
     canvas_width: u32,
     canvas_height: u32,
 }
@@ -17,8 +17,8 @@ impl OptionsUniform {
     fn new() -> Self {
         Self {
             palette: Palette::lcd(),
-            width: 160,
-            height: 144,
+            display_width: 160,
+            display_height: 144,
             canvas_width: 0,
             canvas_height: 0,
         }
