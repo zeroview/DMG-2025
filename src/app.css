@@ -1,3 +1,8 @@
+@font-face {
+  font-family: PixelMix;
+  src: url("../assets/pixelmix.ttf")
+}
+
 * {
   padding: 0;
   margin: 0;
@@ -20,6 +25,7 @@ button {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  font-family: PixelMix;
 }
 canvas {
   position: absolute;

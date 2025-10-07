@@ -20,11 +20,9 @@ use options::*;
 const CANVAS_ID: &str = "canvas";
 
 #[wasm_bindgen]
-pub fn run() -> Result<Proxy, JsValue> {
+pub fn run(rom: &[u8]) -> Result<Proxy, JsValue> {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap_throw();
-
-    let rom = include_bytes!("../roms/test.gb");
 
     use winit::platform::web::EventLoopExtWebSys;
 
