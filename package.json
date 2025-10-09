@@ -11,8 +11,8 @@
     "vite:build": "vite build",
     "vite:dev": "vite -c vite.config.dev.ts",
     "vite:preview": "vite preview",
-    "wasm-pack:dev": "wasm-pack build --dev",
-    "wasm-pack:release": "wasm-pack build"
+    "wasm-pack:dev": "wasm-pack build wasm --dev",
+    "wasm-pack:release": "wasm-pack build wasm"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.0",

@@ -1,4 +1,4 @@
-use crate::cpu::InputFlag;
+use dmg_2025_core::InputFlag;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use winit::keyboard::KeyCode;

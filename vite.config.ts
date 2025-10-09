@@ -5,5 +5,6 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 
 // https://vite.dev/config/
 export default defineConfig({
+  root: "app",
   plugins: [svelte(), wasm(), topLevelAwait()],
 })

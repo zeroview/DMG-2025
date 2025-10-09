@@ -1,83 +1,8 @@
-use bitflags::bitflags;
-use serde::{Deserialize, Serialize};
-use serde_big_array::BigArray;
-
-mod apu;
-mod input;
-mod interrupts;
-mod memory;
-mod ppu;
-mod readwrite;
-mod registers;
-mod timer;
-use apu::*;
-use input::*;
-use interrupts::*;
-use memory::*;
-use ppu::*;
-use readwrite::*;
-use registers::*;
-use timer::*;
-
-pub use apu::{AudioBufferConsumer, AudioConfig};
-pub use input::InputFlag;
-pub use ppu::{DisplayBuffer, DISPLAY_BUFFER_SIZE};
-
-/// The main processing unit
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Deserialize, Serialize)]
-pub struct CPU {
-    reg: Registers,
-    mem: Memory,
-    ppu: PPU,
-    apu: APU,
-    timer: Timer,
-    input: InputReg,
-    istate: InterruptState,
-    halt: bool,
-    pub frame_counter: u8,
-    cycle_counter: u32,
-}
+use super::*;
 
 impl CPU {
-    pub fn new(rom_file: Vec<u8>) -> Self {
-        Self {
-            reg: Registers::new(),
-            ppu: PPU::new(),
-            apu: APU::new(),
-            mem: Memory::new(rom_file),
-            timer: Timer::new(),
-            input: InputReg::new(),
-            istate: InterruptState::new(),
-            halt: false,
-            frame_counter: 0,
-            cycle_counter: 0,
-        }
-    }
-
-    /// Initializes a ring buffer for audio playback and returns its consumer
-    pub fn init_audio_buffer(&mut self, config: &AudioConfig) -> AudioBufferConsumer {
-        self.apu.init_buffer(config)
-    }
-
-    /// Returns the latest fully drawn display buffer for rendering
-    pub fn get_display_buffer(&mut self) -> &DisplayBuffer {
-        &self.ppu.display
-    }
-
-    const MS_PER_M_CYCLE: f32 = 0.0009536743;
-
-    /// Runs Game Boy for given amount of milliseconds
-    pub fn run(&mut self, millis: f32) {
-        let target_cycles = (millis / Self::MS_PER_M_CYCLE).floor() as u32;
-        while self.cycle_counter < target_cycles {
-            self.run_instruction();
-        }
-        self.cycle_counter = 0;
-    }
-
-    /// Emulates the rest of the Game Boy (apart from instructions) for given amount of M-cycles
-    fn cycle(&mut self, cycles: u32) {
+    /// Emulates the Game Boy (apart from instructions) for given amount of M-cycles
+    pub(crate) fn cycle(&mut self, cycles: u32) {
         self.cycle_counter += cycles;
         // Rest of the system runs on T-cycles, which is 1/4 of an M-cycle
         for _ in 0..(4 * cycles) {
@@ -100,7 +25,7 @@ impl CPU {
 
     /// Executes the next instruction at program counter,
     /// ticking the rest of the system too
-    pub fn run_instruction(&mut self) {
+    pub(crate) fn run_instruction(&mut self) {
         let start_vblank = self.ppu.mode == 1;
         // Check for possible interrupt requests
         self.check_for_interrupt();

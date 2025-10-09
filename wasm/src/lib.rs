@@ -1,5 +1,7 @@
+use dmg_2025_core::*;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
+use web_sys::console;
 use winit::{
     application::ApplicationHandler,
     event::*,
@@ -12,8 +14,6 @@ mod audio;
 use audio::*;
 mod renderer;
 use renderer::*;
-mod cpu;
-use cpu::*;
 mod options;
 use options::*;
 
@@ -27,7 +27,7 @@ pub fn run(rom: &[u8]) -> Result<Proxy, JsValue> {
     use winit::platform::web::EventLoopExtWebSys;
 
     let event_loop = EventLoop::with_user_event().build().unwrap_throw();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
     let app = App::new(&event_loop, rom.to_vec());
     let proxy = event_loop.create_proxy();
     event_loop.spawn_app(app);
@@ -114,13 +114,15 @@ impl ApplicationHandler<UserEvent> for App {
         // proxy to send the results to the event loop
         if let Some(proxy) = self.proxy.take() {
             wasm_bindgen_futures::spawn_local(async move {
-                assert!(proxy
-                    .send_event(UserEvent::InitRenderer(Box::new(
-                        Renderer::new(window)
-                            .await
-                            .expect("Unable to create canvas")
-                    )))
-                    .is_ok())
+                assert!(
+                    proxy
+                        .send_event(UserEvent::InitRenderer(Box::new(
+                            Renderer::new(window)
+                                .await
+                                .expect("Unable to create canvas")
+                        )))
+                        .is_ok()
+                )
             });
         }
     }
@@ -140,6 +142,7 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
+                console::log_1(&JsValue::from(self.cpu.frame_counter));
                 if self.last_cpu_frame != self.cpu.frame_counter {
                     renderer.update_display(self.cpu.get_display_buffer());
                     self.last_cpu_frame = self.cpu.frame_counter;

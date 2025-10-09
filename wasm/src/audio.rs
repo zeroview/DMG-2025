@@ -1,8 +1,8 @@
-use crate::cpu::{AudioBufferConsumer, AudioConfig};
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
     FromSample, SizedSample, Stream,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
 };
+use dmg_2025_core::{AudioBufferConsumer, AudioConfig};
 use ringbuf::traits::Consumer;
 
 pub struct AudioHandler {

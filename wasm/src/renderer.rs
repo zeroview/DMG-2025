@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 
 use super::*;
-use crate::cpu::{DisplayBuffer, DISPLAY_BUFFER_SIZE};
+use dmg_2025_core::{DISPLAY_BUFFER_SIZE, DisplayBuffer};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -123,6 +123,7 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_features: wgpu::Features::empty(),
                 required_limits: limits,
                 memory_hints: Default::default(),
@@ -296,7 +297,6 @@ impl Renderer {
         output.present();
 
         self.window.request_redraw();
-
         Ok(())
     }
 }
