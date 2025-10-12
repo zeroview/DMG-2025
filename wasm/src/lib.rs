@@ -36,6 +36,7 @@ pub fn run(rom: &[u8]) -> Result<Proxy, JsValue> {
 }
 
 #[wasm_bindgen]
+// A proxy to communicate with the event loop from JavaScript
 pub struct Proxy {
     proxy: EventLoopProxy<UserEvent>,
 }

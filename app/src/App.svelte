@@ -1,21 +1,21 @@
 <script lang="ts">
   import { run } from "DMG-2025";
 
-  let started = $state(false);
+  let running = $state(false);
 
   let files: FileList | undefined = $state();
   $effect(() => {
     // Open selected file as byte array
     if (files) {
-      files[0].bytes().then(run_emulator);
+      files[0].arrayBuffer().then(run_emulator);
     }
   });
 
-  function run_emulator(rom: Uint8Array) {
-    started = true;
+  function run_emulator(rom: ArrayBuffer) {
+    running = true;
 
     // Initialize WASM emulator with ROM byte array
-    let proxy = run(rom);
+    let proxy = run(new Uint8Array(rom));
     proxy.test("hello from JS");
 
     // Progress emulator every animation frame for the duration it took to make last frame
@@ -31,15 +31,11 @@
     }
     window.requestAnimationFrame(frame);
   }
-
-  function click_file_input() {
-    document.getElementById("fileInput")?.click();
-  }
 </script>
 
 <main>
   <canvas id="canvas"></canvas>
-  {#if !started}
+  {#if !running}
     <input
       id="fileInput"
       accept=".gb"
@@ -47,6 +43,8 @@
       bind:files
       style="display = none"
     />
-    <button onclick={click_file_input}>▶ Choose ROM</button>
+    <button onclick={() => document.getElementById("fileInput")?.click()}>
+      ▶ Choose ROM
+    </button>
   {/if}
 </main>
