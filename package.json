@@ -32,6 +32,6 @@
     }
   },
   "dependencies": {
-    "DMG-2025": "file:pkg"
+    "DMG-2025": "file:wasm/pkg"
   }
 }
