@@ -1,7 +1,6 @@
 use dmg_2025_core::*;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
-use web_sys::console;
 use winit::{
     application::ApplicationHandler,
     event::*,
@@ -24,14 +23,13 @@ pub fn run(rom: &[u8]) -> Result<Proxy, JsValue> {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap_throw();
 
-    use winit::platform::web::EventLoopExtWebSys;
-
     let event_loop = EventLoop::with_user_event().build().unwrap_throw();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
     let app = App::new(&event_loop, rom.to_vec());
     let proxy = event_loop.create_proxy();
-    event_loop.spawn_app(app);
 
+    use winit::platform::web::EventLoopExtWebSys;
+    event_loop.spawn_app(app);
     Ok(Proxy { proxy })
 }
 
@@ -143,7 +141,6 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                console::log_1(&JsValue::from(self.cpu.frame_counter));
                 if self.last_cpu_frame != self.cpu.frame_counter {
                     renderer.update_display(self.cpu.get_display_buffer());
                     self.last_cpu_frame = self.cpu.frame_counter;
@@ -183,6 +180,7 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::InitRenderer(mut renderer) => {
+                renderer.window.request_redraw();
                 // This is where proxy.send_event() ends up
                 renderer.resize(
                     renderer.window.inner_size().width,
@@ -195,7 +193,7 @@ impl ApplicationHandler<UserEvent> for App {
                 self.cpu.run(millis);
             }
             UserEvent::Test(string) => {
-                web_sys::console::log_1(&JsValue::from_str(&string));
+                log::info!("Test from JS: {}", &string);
             }
         }
     }

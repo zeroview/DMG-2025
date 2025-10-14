@@ -22,7 +22,7 @@
     let lastTime = performance.now();
     function frame() {
       let currentTime = performance.now();
-      let millis = Math.min(100, Math.max(0, currentTime - lastTime));
+      let millis = Math.min(17, Math.max(0, currentTime - lastTime));
       console.log(millis);
       lastTime = currentTime;
 

@@ -39,7 +39,7 @@ fn vs_main(
         options.canvas_size.y / options.display_size.y
     );
     // Calculate top-left origin in pixel space for centered canvas
-    let pixel_origin = options.canvas_size - (options.display_size * scale) / 2u;
+    let pixel_origin = (options.canvas_size - (options.display_size * scale)) / 2u;
     // Convert to clip space
     let vertex_origin = (vec2f(pixel_origin) / vec2f(options.canvas_size)) * 2.0 - 1.0;
 
@@ -78,7 +78,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // There's often one stray pixel column and row since the conversion
     // from integer pixel space to floating point clip space doesn't seem to be perfect
     if pixel.x >= options.display_size.x || pixel.y >= options.display_size.y {
-        return vec4f(0.0, 0.0, 0.0, 1.0);
+        discard;
     }
     
     // Calculate index of pixel on display
