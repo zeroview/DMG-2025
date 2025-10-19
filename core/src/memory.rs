@@ -48,7 +48,7 @@ impl CartridgeInfo {
             header[0x47],
             0x03 | 0x06 | 0x0D | 0x0F | 0x10 | 0x13 | 0x1B | 0x1E | 0x22
         );
-        let rom_banks = 2u16.pow((1 + header[0x48]) as u32);
+        let rom_banks = 2u16.saturating_pow((1 + header[0x48]) as u32);
         let ram_banks = if !has_ram {
             0
         } else {

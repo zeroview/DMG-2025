@@ -323,8 +323,8 @@ pub struct NoiseChannel {
     pub envelope_timer: u8,
     pub lfsr: u16,
     pub lfsr_bit: bool,
-    pub lfsr_timer: u16,
-    pub lfsr_pace: u16,
+    pub lfsr_timer: u32,
+    pub lfsr_pace: u32,
     // Register variables
     pub clock_shift: u8,
     pub short_lfsr: bool,
@@ -388,9 +388,9 @@ impl NoiseChannel {
                 self.clock_divider = value & 0b0111;
                 // Divider value 0 is treated as 0.5
                 self.lfsr_pace = if self.clock_divider == 0 {
-                    2u16.pow(self.clock_shift as u32) / 2
+                    2u32.pow(self.clock_shift as u32) / 2
                 } else {
-                    (self.clock_divider as u16) * 2u16.pow(self.clock_shift as u32)
+                    (self.clock_divider as u32) * 2u32.pow(self.clock_shift as u32)
                 };
             }
             0xFF23 => {
