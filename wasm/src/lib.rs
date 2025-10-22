@@ -75,7 +75,6 @@ impl ApplicationHandler<UserEvent> for App {
         window_attributes = window_attributes.with_canvas(Some(html_canvas_element));
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let options = self.options;
         // Run the future asynchronously and use the
         // proxy to send the results to the event loop
         if let Some(proxy) = self.proxy.take() {
@@ -83,7 +82,7 @@ impl ApplicationHandler<UserEvent> for App {
                 assert!(
                     proxy
                         .send_event(UserEvent::InitRenderer(Box::new(
-                            Renderer::new(window, &options)
+                            Renderer::new(window)
                                 .await
                                 .expect("Unable to create canvas")
                         )))

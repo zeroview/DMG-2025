@@ -55,6 +55,7 @@ pub struct Options {
     pub palette: Palette,
     pub speed: f32,
     pub volume: f32,
+    pub glow_strength: f32,
 }
 
 #[wasm_bindgen]
@@ -75,6 +76,7 @@ impl Default for Options {
             palette: Palette::default(),
             speed: 1.0,
             volume: 1.0,
+            glow_strength: 0.4,
         }
     }
 }

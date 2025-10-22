@@ -52,12 +52,9 @@ fn vs_main(
         vec2(-1.0, 1.0),
         vec2(1.0, -1.0),
     );
-    // Mirror origin across axes based on vertex coordinates.
-    // This transforms the full clip space quad into a centered quad
-    // which the display will be drawn on
     let vertex = square_vertices[in_vertex_index];
     let pos = vec4<f32>(
-        -vertex * vertex_origin,
+        vertex,
         0.0,
         1.0
     );
@@ -70,17 +67,16 @@ fn vs_main(
     return out;
 }
 
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Convert pixel coordinates into coordinates on Game Boy display
-    let pixel = (vec2u(in.pos.xy) - in.display_origin) / in.pixel_scale;
-    // Crop out pixels outside of display boundary.
-    // There's often one stray pixel column and row since the conversion
-    // from integer pixel space to floating point clip space doesn't seem to be perfect
-    if pixel.x >= options.display_size.x || pixel.y >= options.display_size.y {
-        discard;
+fn get_pixel_color(pos: vec2<u32>, origin: vec2<u32>, scale: u32) -> vec4<f32> {
+    // Crop out pixels on the top and left sides of display
+    if pos.x < origin.x || pos.y < origin.y {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
     }
-    
+    let pixel = (pos - origin) / scale;
+    // Crop out pixels on the bottom and right sides of display
+    if pixel.x >= options.display_size.x || pixel.y >= options.display_size.y {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
     // Calculate index of pixel on display
     let pixel_i = pixel.y * options.display_size.x + pixel.x;
     // Calculate index of the two color bits in display buffer
@@ -99,5 +95,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = (int >> int_bit_i) & 3u;
     // Return color from current palette
     return options.palette[color];
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+
+    return get_pixel_color(vec2u(in.pos.xy), in.display_origin, in.pixel_scale);
 }
 
