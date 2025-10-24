@@ -51,15 +51,17 @@ impl Default for Palette {
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy)]
-pub struct Options {
+pub struct EmulatorOptions {
     pub palette: Palette,
     pub speed: f32,
     pub volume: f32,
     pub glow_strength: f32,
+    pub glow_iterations: usize,
+    pub glow_radius: f32,
 }
 
 #[wasm_bindgen]
-impl Options {
+impl EmulatorOptions {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self::default()
@@ -70,13 +72,15 @@ impl Options {
     }
 }
 
-impl Default for Options {
+impl Default for EmulatorOptions {
     fn default() -> Self {
         Self {
             palette: Palette::default(),
             speed: 1.0,
             volume: 1.0,
-            glow_strength: 0.4,
+            glow_strength: 0.5,
+            glow_iterations: 8,
+            glow_radius: 1.0,
         }
     }
 }
@@ -87,7 +91,7 @@ pub enum UserEvent {
     LoadRom(Vec<u8>, bool),
     RunCPU(f32),
     UpdateInput(String, bool),
-    UpdateOptions(Options),
+    UpdateOptions(EmulatorOptions),
     Test(String),
 }
 
@@ -120,7 +124,7 @@ impl Proxy {
         self.send(UserEvent::UpdateInput(key, pressed));
     }
 
-    pub fn update_options(&self, options: &Options) {
+    pub fn update_options(&self, options: &EmulatorOptions) {
         self.send(UserEvent::UpdateOptions(*options));
     }
 }

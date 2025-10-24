@@ -42,9 +42,11 @@ main {
   flex-direction: row;
   gap: 15px;
 }
-
 .menu-row p {
   width: 200px;
+}
+
+p {
   color: #d1d1d1;
   font-size: 40px;
   font-family: GBBoot;

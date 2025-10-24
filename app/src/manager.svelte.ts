@@ -1,5 +1,5 @@
 
-import { spawn_event_loop, Proxy, Options } from "DMG-2025";
+import { spawn_event_loop, Proxy, EmulatorOptions } from "DMG-2025";
 
 export default class EmulatorManager {
   private proxy: Proxy | undefined = undefined;
@@ -7,7 +7,7 @@ export default class EmulatorManager {
 
   public initialized = false;
   public running = $state(false);
-  public options = new Options();
+  public options = new EmulatorOptions();
 
 
   loadRom = (rom: ArrayBuffer, isZip: boolean) => {

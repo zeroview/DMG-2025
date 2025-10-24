@@ -81,6 +81,24 @@
     manager.updateOptions();
   });
 
+  let glowStrengthSliderVal = $state(50);
+  $effect(() => {
+    manager.options.glow_strength = glowStrengthSliderVal / 100;
+    manager.updateOptions();
+  });
+
+  let glowQualitySliderVal = $state(4);
+  $effect(() => {
+    manager.options.glow_iterations = glowQualitySliderVal * 2;
+    manager.updateOptions();
+  });
+
+  let glowRadiusSliderVal = $state(1.0);
+  $effect(() => {
+    manager.options.glow_radius = glowRadiusSliderVal;
+    manager.updateOptions();
+  });
+
   const zipMimeTypes = [
     "application/zip",
     "application/x-zip-compressed",
@@ -148,6 +166,47 @@
         <div class="menu-row">
           <p style="text-align:right">Palette:</p>
           <button onclick={swapPalette}>{currentPalette}</button>
+        </div>
+
+        <p style="text-align:center; margin-top: 20px;">Glow Options</p>
+
+        <div class="menu-row">
+          <p style="text-align:right">Strength:</p>
+          <input
+            type="range"
+            bind:value={glowStrengthSliderVal}
+            min="0"
+            max="100"
+            step="1"
+            style="width: 250px"
+          />
+          <p>{`${glowStrengthSliderVal}%`}</p>
+        </div>
+
+        <div class="menu-row">
+          <p style="text-align:right">Quality:</p>
+          <input
+            type="range"
+            bind:value={glowQualitySliderVal}
+            min="0"
+            max="10"
+            step="1"
+            style="width: 250px"
+          />
+          <p>{glowQualitySliderVal}</p>
+        </div>
+
+        <div class="menu-row">
+          <p style="text-align:right">Radius:</p>
+          <input
+            type="range"
+            bind:value={glowRadiusSliderVal}
+            min="0"
+            max="5"
+            step="0.1"
+            style="width: 250px"
+          />
+          <p>{glowRadiusSliderVal}</p>
         </div>
       </div>
     </div>

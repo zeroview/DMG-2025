@@ -15,12 +15,12 @@ var<uniform> options: OptionsUniform;
 // Structured as an array of 4D vectors to
 // satisfy the memory alignment system.
 // 1440 integers in 4D vectors = 360 vectors
-struct PixelUniform {
-    pixels: array<vec4<u32>, 360>
+struct DisplayUniform {
+    buffer: array<vec4<u32>, 360>
 };
 
 @group(1) @binding(0)
-var<uniform> pixels: PixelUniform;
+var<uniform> display: DisplayUniform;
 
 struct VertexOutput {
     @builtin(position) pos: vec4<f32>,
@@ -91,7 +91,7 @@ fn get_pixel_color(pos: vec2<u32>, origin: vec2<u32>, scale: u32) -> vec4<f32> {
     let int_bit_i = ((vec_bit_i % 32u) / 2u) * 2u;
 
     // Get integer value and bit mask the color value
-    let int = pixels.pixels[vec_i][int_i];
+    let int = display.buffer[vec_i][int_i];
     let color = (int >> int_bit_i) & 3u;
     // Return color from current palette
     return options.palette[color];
