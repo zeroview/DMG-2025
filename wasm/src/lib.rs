@@ -177,6 +177,12 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(rom) = rom {
                     match CPU::new(rom) {
                         Ok(mut cpu) => {
+                            // Update document title based on ROM header
+                            let document =
+                                web_sys::window().unwrap_throw().document().unwrap_throw();
+                            document
+                                .set_title(&format!("{} - DMG-2025", cpu.get_cartridge_title()));
+                            // Initialize audio playback
                             cpu.set_audio_sample_rate(self.audio.sample_rate);
                             let audio_consumer = cpu
                                 .init_audio_buffer(self.audio.sample_capacity, self.audio.channels);

@@ -67,6 +67,11 @@ impl CPU {
         }
     }
 
+    /// Returns the title of the cartridge as defined in its header
+    pub fn get_cartridge_title(&self) -> &str {
+        &self.mem.info.title
+    }
+
     const MS_PER_M_CYCLE: f32 = 0.0009536743;
 
     /// Runs Game Boy for given amount of milliseconds

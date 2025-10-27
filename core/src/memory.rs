@@ -12,7 +12,7 @@ pub enum MBCType {
     MBC7,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CartridgeInfo {
     /// Type of memory bank controller
     pub mbc: MBCType,
@@ -25,6 +25,8 @@ pub struct CartridgeInfo {
     pub rom_banks: u16,
     /// Amount of 8 KiB RAM banks cartridge provides
     pub ram_banks: u16,
+    /// Title of the cartridge
+    pub title: String,
 }
 
 impl CartridgeInfo {
@@ -60,12 +62,16 @@ impl CartridgeInfo {
                 _ => 0,
             }
         };
+        let title = std::str::from_utf8(&header[0x34..=0x3E])
+            .unwrap_or_default()
+            .to_string();
         Self {
             mbc,
             has_ram,
             has_battery,
             rom_banks,
             ram_banks,
+            title,
         }
     }
 }
@@ -99,7 +105,7 @@ impl Memory {
         }
         let info = CartridgeInfo::from_header(&rom_file[0x0100..=0x014F]);
         println!("{:?}", info);
-        let mut mbc = MBC::init(info);
+        let mut mbc = MBC::init(info.clone());
         mbc.load_rom(rom_file);
 
         Ok(Self {
