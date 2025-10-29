@@ -1,4 +1,5 @@
 <script lang="ts">
+  import MenuSlider from "./MenuSlider.svelte";
   import EmulatorManager from "./manager.svelte";
   import { Color, Palette } from "DMG-2025";
   import { fade } from "svelte/transition";
@@ -42,7 +43,6 @@
       new Color(0.0343398, 0.1384316, 0.0930589),
       new Color(0.0024282, 0.009134, 0.0144438),
     ),
-
     Raw: new Palette(
       new Color(1.0, 1.0, 1.0),
       new Color(0.6666, 0.6666, 0.6666),
@@ -70,53 +70,68 @@
   const speedSliderValues = [
     0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 1, 1.1, 1.3, 1.5, 2, 3, 5, 10, 20,
   ];
-  let speedSliderVal = $state(speedSliderValues.indexOf(1));
-  $effect(() => {
-    manager.options.speed = speedSliderValues[speedSliderVal];
-    manager.updateOptions();
+  let speedSliderVal = $state({
+    value: speedSliderValues.indexOf(1),
+    effect: (value: number) => {
+      manager.options.speed = speedSliderValues[value];
+      manager.updateOptions();
+    },
   });
 
-  let volumeSliderVal = $state(100);
-  $effect(() => {
-    manager.options.volume = volumeSliderVal / 100;
-    manager.updateOptions();
+  let scaleSliderVal = $state({
+    value: 0,
+    effect: (val: number) => {
+      manager.options.scale = val;
+      manager.updateOptions();
+    },
   });
 
-  let scaleSliderVal = $state(0);
-  $effect(() => {
-    manager.options.scale = scaleSliderVal;
-    manager.updateOptions();
+  let volumeSliderVal = $state({
+    value: 100,
+    effect: (value: number) => {
+      manager.options.volume = value / 100;
+      manager.updateOptions();
+    },
   });
 
-  let backgroundGlowStrengthSliderVal = $state(60);
-  $effect(() => {
-    manager.options.background_glow_strength =
-      backgroundGlowStrengthSliderVal / 100;
-    manager.updateOptions();
+  let backgroundGlowStrengthSliderVal = $state({
+    value: 60,
+    effect: (value: number) => {
+      manager.options.background_glow_strength = value / 100;
+      manager.updateOptions();
+    },
   });
 
-  let displayGlowStrengthSliderVal = $state(30);
-  $effect(() => {
-    manager.options.display_glow_strength = displayGlowStrengthSliderVal / 100;
-    manager.updateOptions();
+  let displayGlowStrengthSliderVal = $state({
+    value: 30,
+    effect: (value: number) => {
+      manager.options.display_glow_strength = value / 100;
+      manager.updateOptions();
+    },
   });
 
-  let glowQualitySliderVal = $state(5);
-  $effect(() => {
-    manager.options.glow_iterations = glowQualitySliderVal * 2;
-    manager.updateOptions();
+  let glowQualitySliderVal = $state({
+    value: 5,
+    effect: (value: number) => {
+      manager.options.glow_iterations = value * 2;
+      manager.updateOptions();
+    },
   });
 
-  let glowRadiusSliderVal = $state(0.5);
-  $effect(() => {
-    manager.options.glow_radius = glowRadiusSliderVal;
-    manager.updateOptions();
+  let glowRadiusSliderVal = $state({
+    value: 0.5,
+    effect: (value: number) => {
+      manager.options.glow_radius = value;
+      manager.updateOptions();
+    },
   });
 
-  let ambientLightSliderVal = $state(0.3);
-  $effect(() => {
-    manager.options.ambient_light = ambientLightSliderVal;
-    manager.updateOptions();
+  let ambientLightSliderVal = $state({
+    value: 0.3,
+    effect: (value: number) => {
+      manager.options.ambient_light = value;
+      manager.updateOptions();
+    },
   });
 
   const zipMimeTypes = [
@@ -157,45 +172,29 @@
         </button>
         <p style="height: 50px"></p>
 
-        <div class="menu-row">
-          <p style="text-align:right">Speed:</p>
-          <input
-            type="range"
-            bind:value={speedSliderVal}
-            min="0"
-            max={speedSliderValues.length - 1}
-            step="1"
-            style="width: 250px"
-          />
-          <p>{`${speedSliderValues[speedSliderVal]}x`}</p>
-        </div>
-
-        <div class="menu-row">
-          <p style="text-align:right">Volume:</p>
-          <input
-            type="range"
-            bind:value={volumeSliderVal}
-            min="0"
-            max="200"
-            step="1"
-            style="width: 250px"
-          />
-          <p>{`${volumeSliderVal}%`}</p>
-        </div>
-
-        <div class="menu-row">
-          <p style="text-align:right">Scale offset:</p>
-          <input
-            type="range"
-            bind:value={scaleSliderVal}
-            min="-5"
-            max="5"
-            step="1"
-            style="width: 250px"
-          />
-          <p>{`${scaleSliderVal}`}</p>
-        </div>
-
+        <MenuSlider
+          value={speedSliderVal}
+          min={0}
+          max={speedSliderValues.length - 1}
+          step={1}
+          label="Speed:"
+          valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
+        />
+        <MenuSlider
+          value={volumeSliderVal}
+          min={0}
+          max={200}
+          step={1}
+          label="Volume:"
+          valueLabelCallback={(value) => `${value}%`}
+        />
+        <MenuSlider
+          value={scaleSliderVal}
+          min={-5}
+          max={5}
+          step={1}
+          label="Scale offset:"
+        />
         <div class="menu-row">
           <p style="text-align:right">Palette:</p>
           <button onclick={swapPalette}>{currentPalette}</button>
@@ -203,70 +202,44 @@
 
         <p style="text-align:center; margin-top: 20px;">Glow Options</p>
 
-        <div class="menu-row">
-          <p style="text-align:right">Background strength:</p>
-          <input
-            type="range"
-            bind:value={backgroundGlowStrengthSliderVal}
-            min="0"
-            max="100"
-            step="1"
-            style="width: 250px"
-          />
-          <p>{`${backgroundGlowStrengthSliderVal}%`}</p>
-        </div>
+        <MenuSlider
+          value={backgroundGlowStrengthSliderVal}
+          min={0}
+          max={100}
+          step={1}
+          label="BG strength:"
+          valueLabelCallback={(value) => `${value}%`}
+        />
+        <MenuSlider
+          value={displayGlowStrengthSliderVal}
+          min={0}
+          max={100}
+          step={1}
+          label="Display strength:"
+          valueLabelCallback={(value) => `${value}%`}
+        />
+        <MenuSlider
+          value={glowQualitySliderVal}
+          min={0}
+          max={10}
+          step={1}
+          label="Quality:"
+        />
 
-        <div class="menu-row">
-          <p style="text-align:right">Display strength:</p>
-          <input
-            type="range"
-            bind:value={displayGlowStrengthSliderVal}
-            min="0"
-            max="100"
-            step="1"
-            style="width: 250px"
-          />
-          <p>{`${displayGlowStrengthSliderVal}%`}</p>
-        </div>
-
-        <div class="menu-row">
-          <p style="text-align:right">Quality:</p>
-          <input
-            type="range"
-            bind:value={glowQualitySliderVal}
-            min="0"
-            max="10"
-            step="1"
-            style="width: 250px"
-          />
-          <p>{glowQualitySliderVal}</p>
-        </div>
-
-        <div class="menu-row">
-          <p style="text-align:right">Radius:</p>
-          <input
-            type="range"
-            bind:value={glowRadiusSliderVal}
-            min="0"
-            max="5"
-            step="0.1"
-            style="width: 250px"
-          />
-          <p>{glowRadiusSliderVal}</p>
-        </div>
-
-        <div class="menu-row">
-          <p style="text-align:right">Ambient light:</p>
-          <input
-            type="range"
-            bind:value={ambientLightSliderVal}
-            min="0"
-            max="1"
-            step="0.01"
-            style="width: 250px"
-          />
-          <p>{ambientLightSliderVal}</p>
-        </div>
+        <MenuSlider
+          value={glowRadiusSliderVal}
+          min={0}
+          max={5}
+          step={0.1}
+          label="Radius:"
+        />
+        <MenuSlider
+          value={ambientLightSliderVal}
+          min={0}
+          max={1}
+          step={0.01}
+          label="Ambient light:"
+        />
       </div>
     </div>
   {/if}
