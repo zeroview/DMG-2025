@@ -4,10 +4,11 @@ impl CPU {
     /// Emulates the Game Boy (apart from instructions) for given amount of M-cycles
     pub(crate) fn cycle(&mut self, cycles: u32) {
         self.cycle_counter += cycles;
-        // Rest of the system runs on T-cycles, which is 1/4 of an M-cycle
+        // Rest of the system runs on T-cycles, which are 1/4 of an M-cycle
         for _ in 0..(4 * cycles) {
             // Check if OAM DMA should be started
-            if self.ppu.oam_dma_timer == 640 {
+            if self.ppu.oam_dma_request {
+                self.ppu.oam_dma_request = false;
                 self.oam_dma(self.ppu.oam_dma_source);
             }
             // Cycle PPU
@@ -26,7 +27,8 @@ impl CPU {
     /// Executes the next instruction at program counter,
     /// ticking the rest of the system too
     pub(crate) fn run_instruction(&mut self) {
-        let start_vblank = self.ppu.mode == 1;
+        let start_active = self.ppu.state == PPUState::Active;
+        let start_vblank = self.ppu.mode == PPUMode::VBlank;
         // Check for possible interrupt requests
         self.check_for_interrupt();
 
@@ -38,9 +40,10 @@ impl CPU {
             self.run_opcode();
         }
 
-        // Increment frame coutner if system hit VBlank during execution
-        let end_vblank = self.ppu.mode == 1;
-        if !start_vblank && end_vblank {
+        // Increment frame counter if system hit VBlank during execution or got disabled
+        let end_disabled = self.ppu.state == PPUState::Disabled;
+        let end_vblank = self.ppu.mode == PPUMode::VBlank;
+        if (!start_vblank && end_vblank) || (start_active && end_disabled) {
             self.frame_counter = self.frame_counter.wrapping_add(1);
         }
     }
