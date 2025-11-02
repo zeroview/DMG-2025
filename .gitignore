@@ -21,7 +21,7 @@ dist-ssr
 
 # Rust
 .cargo/
-/target
+target/
 **/*.rs.bk
 Cargo.lock
 bin/
