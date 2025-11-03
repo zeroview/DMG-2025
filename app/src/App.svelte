@@ -1,10 +1,12 @@
 <script lang="ts">
+  import Browser from "./Browser.svelte";
   import MenuSlider from "./MenuSlider.svelte";
   import EmulatorManager from "./manager.svelte";
   import { Color, Palette } from "DMG-2025";
   import { fade } from "svelte/transition";
 
   let manager = new EmulatorManager();
+  let browserVisible = $state(false);
 
   const inputMap: Record<string, string> = {
     Right: "ArrowRight",
@@ -22,6 +24,9 @@
         return;
       }
       manager.toggle_execution();
+      if (!manager.running) {
+        browserVisible = false;
+      }
     }
     for (let key of Object.keys(inputMap)) {
       if (inputMap[key] === event.key) {
@@ -159,88 +164,104 @@
   <canvas id="canvas" tabindex="-1"></canvas>
   {#if !manager.running}
     <div class="menu" transition:fade={{ duration: 100 }}>
-      <div class="menu-container">
-        <input
-          id="fileInput"
-          accept=".gb,.zip"
-          type="file"
-          bind:files
-          style="display: none"
-        />
-        <button onclick={() => document.getElementById("fileInput")?.click()}>
-          Load ROM
-        </button>
-        <p style="height: 50px"></p>
-
-        <MenuSlider
-          value={speedSliderVal}
-          min={0}
-          max={speedSliderValues.length - 1}
-          step={1}
-          label="Speed:"
-          valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
-        />
-        <MenuSlider
-          value={volumeSliderVal}
-          min={0}
-          max={200}
-          step={1}
-          label="Volume:"
-          valueLabelCallback={(value) => `${value}%`}
-        />
-        <MenuSlider
-          value={scaleSliderVal}
-          min={-5}
-          max={5}
-          step={1}
-          label="Scale offset:"
-        />
-        <div class="menu-row">
-          <p style="text-align:right">Palette:</p>
-          <button onclick={swapPalette}>{currentPalette}</button>
+      {#if browserVisible}
+        <div class="browser-container">
+          <button class="back" onclick={() => (browserVisible = false)}
+            >{"< Back"}</button
+          >
+          <Browser {manager} />
         </div>
+      {:else}
+        <div class="menu-container">
+          <input
+            id="fileInput"
+            accept=".gb,.zip"
+            type="file"
+            bind:files
+            style="display: none"
+          />
+          <div class="button-row">
+            <button
+              onclick={() => document.getElementById("fileInput")?.click()}
+            >
+              Load ROM
+            </button>
+            <button onclick={() => (browserVisible = true)}
+              >Browse Homebrew Hub</button
+            >
+          </div>
+          <p style="height: 50px"></p>
 
-        <p style="text-align:center; margin-top: 20px;">Glow Options</p>
+          <MenuSlider
+            value={speedSliderVal}
+            min={0}
+            max={speedSliderValues.length - 1}
+            step={1}
+            label="Speed:"
+            valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
+          />
+          <MenuSlider
+            value={volumeSliderVal}
+            min={0}
+            max={200}
+            step={1}
+            label="Volume:"
+            valueLabelCallback={(value) => `${value}%`}
+          />
+          <MenuSlider
+            value={scaleSliderVal}
+            min={-5}
+            max={5}
+            step={1}
+            label="Scale offset:"
+          />
+          <div class="menu-row">
+            <p style="text-align:right">Palette:</p>
+            <button onclick={swapPalette}>{currentPalette}</button>
+          </div>
 
-        <MenuSlider
-          value={backgroundGlowStrengthSliderVal}
-          min={0}
-          max={100}
-          step={1}
-          label="BG strength:"
-          valueLabelCallback={(value) => `${value}%`}
-        />
-        <MenuSlider
-          value={displayGlowStrengthSliderVal}
-          min={0}
-          max={100}
-          step={1}
-          label="Display strength:"
-          valueLabelCallback={(value) => `${value}%`}
-        />
-        <MenuSlider
-          value={glowQualitySliderVal}
-          min={0}
-          max={10}
-          step={1}
-          label="Quality:"
-        />
+          <p style="text-align:center; margin-top: 20px;">Glow Options</p>
 
-        <MenuSlider
-          value={glowRadiusSliderVal}
-          min={0}
-          max={5}
-          step={0.1}
-          label="Radius:"
-        />
-        <MenuSlider
-          value={ambientLightSliderVal}
-          min={0}
-          max={1}
-          step={0.01}
-          label="Ambient light:"
-        />
-      </div>
+          <MenuSlider
+            value={backgroundGlowStrengthSliderVal}
+            min={0}
+            max={100}
+            step={1}
+            label="BG strength:"
+            valueLabelCallback={(value) => `${value}%`}
+          />
+          <MenuSlider
+            value={displayGlowStrengthSliderVal}
+            min={0}
+            max={100}
+            step={1}
+            label="Display strength:"
+            valueLabelCallback={(value) => `${value}%`}
+          />
+          <MenuSlider
+            value={glowQualitySliderVal}
+            min={0}
+            max={10}
+            step={1}
+            label="Quality:"
+          />
+
+          <MenuSlider
+            value={glowRadiusSliderVal}
+            min={0}
+            max={5}
+            step={0.1}
+            label="Radius:"
+          />
+          <MenuSlider
+            value={ambientLightSliderVal}
+            min={0}
+            max={1}
+            step={0.01}
+            label="Ambient light:"
+          />
+        </div>
+      {/if}
     </div>
   {/if}
 </main>

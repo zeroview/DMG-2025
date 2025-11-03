@@ -20,7 +20,11 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* JSON */
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
   },
   "include": ["vite.config.ts"]
 }
