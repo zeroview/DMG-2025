@@ -12,7 +12,7 @@ impl CPU {
     /// Reads from given memory address
     pub(crate) fn read(&self, address: u16) -> u8 {
         match address {
-            // ROM, external and work RAM, high RAM
+            // ROM, external, work and echo RAM, high RAM
             0x0000..=0x7FFF | 0xA000..=0xFDFF | 0xFF80..=0xFFFE => self.mem.mem_read(address),
             // VRAM, OAM, LCD I/O
             0x8000..=0x9FFF | 0xFE00..=0xFE9F | 0xFF40..=0xFF4B => self.ppu.mem_read(address),

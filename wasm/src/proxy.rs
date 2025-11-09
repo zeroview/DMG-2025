@@ -96,6 +96,7 @@ pub enum UserEvent {
     InitRenderer(Box<Renderer>),
     LoadRom(Vec<u8>, bool),
     RunCPU(f32),
+    SetPaused(bool),
     UpdateInput(String, bool),
     UpdateOptions(EmulatorOptions),
     Test(String),
@@ -124,6 +125,10 @@ impl Proxy {
 
     pub fn run_cpu(&self, millis: f32) {
         self.send(UserEvent::RunCPU(millis));
+    }
+
+    pub fn set_paused(&self, paused: bool) {
+        self.send(UserEvent::SetPaused(paused));
     }
 
     pub fn update_input(&self, key: String, pressed: bool) {

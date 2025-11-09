@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 
 pub struct AudioHandler {
     pub volume: Arc<RwLock<f32>>,
+    pub paused: Arc<RwLock<bool>>,
     pub sample_rate: u32,
     pub channels: usize,
     pub sample_capacity: usize,
@@ -35,6 +36,7 @@ impl AudioHandler {
 
         Self {
             volume: Arc::new(RwLock::new(1.0)),
+            paused: Arc::new(RwLock::new(true)),
             sample_rate,
             channels,
             sample_capacity,
@@ -52,6 +54,7 @@ impl AudioHandler {
             cpal::SampleFormat::U16 => self.init_stream::<u16>(consumer),
             _ => panic!("Unsupported sample format!"),
         };
+        *self.paused.write().unwrap() = false;
     }
 
     fn init_stream<T>(&mut self, mut consumer: AudioBufferConsumer)
@@ -61,17 +64,34 @@ impl AudioHandler {
         let err_fn = |err| log::error!("Audio stream error: {}", err);
 
         let volume_ref = Arc::clone(&self.volume);
+        let paused_ref = Arc::clone(&self.paused);
+        let mut last_sample = 0.0;
         let stream = self
             .device
             .build_output_stream(
                 &self.config,
                 move |data: &mut [T], _| {
+                    if *paused_ref.read().unwrap() {
+                        data.fill(T::from_sample::<f32>(0.0));
+                        return;
+                    }
                     let volume = volume_ref.read().unwrap();
+                    let mut late = false;
                     for sample in data.iter_mut() {
                         *sample = match consumer.try_pop() {
-                            Some(s) => T::from_sample::<f32>(s * *volume),
-                            None => T::from_sample::<f32>(0.0),
+                            Some(s) => {
+                                let new_sample = s * 0.01 * *volume;
+                                last_sample = new_sample;
+                                T::from_sample::<f32>(new_sample)
+                            }
+                            None => {
+                                late = true;
+                                T::from_sample::<f32>(last_sample)
+                            }
                         };
+                    }
+                    if late {
+                        log::warn!("Audio producer is late");
                     }
                 },
                 err_fn,

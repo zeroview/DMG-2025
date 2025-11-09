@@ -26,6 +26,7 @@ export default class EmulatorManager {
     }
 
     this.running = !this.running;
+    this.proxy?.set_paused(!this.running);
     if (this.running) {
       this.lastFrameTime = performance.now();
       window.requestAnimationFrame(this.frame);

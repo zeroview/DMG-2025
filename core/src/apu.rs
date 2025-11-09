@@ -1,5 +1,28 @@
 use super::*;
 
+pub trait Channel {
+    /// Reads value from channel register at global address
+    /// Note: Unused bits, length counters and frequencies are set to 1s when read back,
+    /// as defined here: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware#Register_Reading
+    fn read_register(&self, address: u16) -> u8;
+
+    /// Writes value to channel register at global address
+    fn write_register(&mut self, address: u16, value: u8);
+
+    /// Returns the next sample
+    fn get_sample(&self) -> f32;
+
+    /// Triggers the channel
+    /// (https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware#Trigger_Event)
+    fn trigger(&mut self);
+
+    /// Converts internal digital sample between 0 and 15
+    /// to an analog value between -1.0 and 1.0
+    fn convert_sample(&self, digital: u8) -> f32 {
+        ((digital as f32) / 7.5) - 1.0
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct SquareChannel {
     // State variables
@@ -30,7 +53,7 @@ impl SquareChannel {
             on: false,
             period_div: 0,
             duty_cycle_pointer: 0,
-            length_timer: 64,
+            length_timer: 0,
             volume: 0,
             period: 0,
             sweep_timer: 1,
@@ -49,63 +72,17 @@ impl SquareChannel {
         }
     }
 
-    pub fn read_register(&self, reg_index: u16) -> u8 {
-        match reg_index {
-            0 => (self.sweep_pace << 4) | ((!self.sweep_increase as u8) << 3) | self.sweep_step,
-            1 => (self.duty_cycle_index << 6) | self.initial_length_timer,
-            2 => {
-                (self.initial_volume << 4)
-                    | ((self.envelope_increase as u8) << 3)
-                    | self.envelope_pace
-            }
-            3 => (self.initial_period & 0xFF) as u8,
-            4 => (self.initial_period >> 8) as u8 | ((self.length_timer_enabled as u8) << 6),
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn write_register(&mut self, reg_index: u16, value: u8) {
-        match reg_index {
-            0 => {
-                self.sweep_pace = value >> 4;
-                // 0 == increase
-                self.sweep_increase = value & 0b1000 == 0;
-                self.sweep_step = value & 0b0111;
-            }
-            1 => {
-                self.duty_cycle_index = value >> 6;
-                self.initial_length_timer = value & 0b11_1111;
-            }
-            2 => {
-                self.initial_volume = value >> 4;
-                self.envelope_increase = value & 0b1000 > 0;
-                self.envelope_pace = value & 0b0111;
-            }
-            3 => self.initial_period = (self.initial_period & 0xFF00) | value as u16,
-            4 => {
-                self.length_timer_enabled = value & 0b0100_0000 > 0;
-                self.initial_period =
-                    (self.initial_period & 0xFF) | (((value & 0b111) as u16) << 8);
-                if value & 0b1000_0000 > 0 {
-                    self.trigger();
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
     pub fn update_length_timer(&mut self) {
-        if self.length_timer == 64 {
-            if self.length_timer_enabled {
+        if self.length_timer_enabled {
+            if self.length_timer == 0 {
                 self.on = false;
+            } else {
+                self.length_timer -= 1;
             }
-        } else {
-            self.length_timer += 1;
         }
     }
 
     pub fn update_sweep(&mut self) {
-        // Pace of 0 disables period sweep
         if self.sweep_pace == 0 {
             return;
         }
@@ -127,11 +104,11 @@ impl SquareChannel {
     }
 
     pub fn update_envelope(&mut self) {
-        // Pace of 0 disables the envelope
+        let mut pace = self.envelope_pace;
         if self.envelope_pace == 0 {
-            return;
+            pace = 8;
         }
-        if self.envelope_timer < self.envelope_pace {
+        if self.envelope_timer < pace {
             self.envelope_timer += 1;
         } else {
             self.envelope_timer = 1;
@@ -158,27 +135,6 @@ impl SquareChannel {
         }
     }
 
-    pub fn trigger(&mut self) {
-        self.on = true;
-        self.period = self.initial_period;
-        self.period_div = self.period;
-        self.volume = self.initial_volume;
-        self.envelope_timer = 1;
-        self.sweep_timer = 1;
-        if self.length_timer == 64 {
-            self.length_timer = self.initial_length_timer;
-        }
-    }
-
-    pub fn get_sample(&self) -> f32 {
-        if self.on {
-            let val = self.get_duty_cycle_val(self.duty_cycle_pointer) as f32;
-            val * (self.volume as f32) / 15.0
-        } else {
-            0.0
-        }
-    }
-
     fn get_duty_cycle_val(&self, index: u8) -> u8 {
         let duty_cycle = match self.duty_cycle_index {
             // 12.5 %
@@ -195,17 +151,103 @@ impl SquareChannel {
     }
 }
 
+impl Channel for SquareChannel {
+    fn read_register(&self, address: u16) -> u8 {
+        match address {
+            // NR10 (Sweep)
+            0xFF10 => {
+                (self.sweep_pace << 4)
+                    | ((!self.sweep_increase as u8) << 3)
+                    | self.sweep_step
+                    | 0x80
+            }
+            // NR11 / NR21 (Length and duty cycle)
+            0xFF11 | 0xFF16 => (self.duty_cycle_index << 6) | 0x3F,
+            // NR12 / NR22 (Volume and envelope)
+            0xFF12 | 0xFF17 => {
+                (self.initial_volume << 4)
+                    | ((self.envelope_increase as u8) << 3)
+                    | self.envelope_pace
+            }
+            // NR13 / NR23 (Period low bits)
+            0xFF13 | 0xFF18 => 0xFF,
+            // NR14 / NR14 (Control and period high bits)
+            0xFF14 | 0xFF19 => ((self.length_timer_enabled as u8) << 6) | 0xBF,
+            _ => unreachable!(),
+        }
+    }
+
+    fn write_register(&mut self, address: u16, value: u8) {
+        match address {
+            // NR10 (Sweep)
+            0xFF10 => {
+                self.sweep_pace = value >> 4;
+                // 0 == increase
+                self.sweep_increase = value & 0b1000 == 0;
+                self.sweep_step = value & 0b0111;
+            }
+            // NR11 / NR21 (Length and duty cycle)
+            0xFF11 | 0xFF16 => {
+                self.duty_cycle_index = value >> 6;
+                self.initial_length_timer = 64 - (value & 0b11_1111);
+            }
+            // NR12 / NR22 (Volume and envelope)
+            0xFF12 | 0xFF17 => {
+                self.initial_volume = value >> 4;
+                self.envelope_increase = value & 0b1000 > 0;
+                self.envelope_pace = value & 0b0111;
+                // Setting envelope to decrease from 0 turns off the channel
+                if self.initial_volume == 0 && !self.envelope_increase {
+                    self.on = false;
+                }
+            }
+            // NR13 / NR23 (Period low bits)
+            0xFF13 | 0xFF18 => self.initial_period = (self.initial_period & 0xFF00) | value as u16,
+            // NR14 / NR14 (Control and period high bits)
+            0xFF14 | 0xFF19 => {
+                self.length_timer_enabled = value & 0b0100_0000 > 0;
+                self.initial_period =
+                    (self.initial_period & 0xFF) | (((value & 0b111) as u16) << 8);
+                if value & 0b1000_0000 > 0 {
+                    self.trigger();
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn trigger(&mut self) {
+        self.on = true;
+        self.period = self.initial_period;
+        self.period_div = self.period;
+        self.volume = self.initial_volume;
+        self.envelope_timer = 1;
+        self.sweep_timer = 1;
+        if self.length_timer == 64 {
+            self.length_timer = self.initial_length_timer;
+        }
+    }
+
+    fn get_sample(&self) -> f32 {
+        if self.on {
+            self.convert_sample(self.volume * self.get_duty_cycle_val(self.duty_cycle_pointer))
+        } else {
+            0.0
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct WaveChannel {
     // State variables
     pub on: bool,
     pub period_div: u16,
     pub wave_pointer: u8,
-    pub length_timer: u8,
+    pub length_timer: u16,
     pub output_level: u8,
     pub period: u16,
     // Register variables
-    pub initial_length_timer: u8,
+    pub initial_length_timer: u16,
     pub length_timer_enabled: bool,
     pub initial_period: u16,
     pub wave_ram: [u8; 0x10],
@@ -217,7 +259,7 @@ impl WaveChannel {
             on: false,
             period_div: 0,
             wave_pointer: 0,
-            length_timer: 64,
+            length_timer: 0,
             output_level: 0,
             period: 0,
 
@@ -228,44 +270,13 @@ impl WaveChannel {
         }
     }
 
-    pub fn read_register(&self, address: u16) -> u8 {
-        match address {
-            0xFF1A => (self.on as u8) << 7,
-            0xFF1B => self.initial_length_timer,
-            0xFF1C => self.output_level << 5,
-            0xFF1D => (self.initial_period & 0xFF) as u8,
-            0xFF1E => (self.initial_period >> 8) as u8 | ((self.length_timer_enabled as u8) << 6),
-            0xFF30..=0xFF3F => self.wave_ram[(address - 0xFF30) as usize],
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn write_register(&mut self, address: u16, value: u8) {
-        match address {
-            0xFF1A => self.on = value & 0b1000_0000 > 0,
-            0xFF1B => self.initial_length_timer = value,
-            0xFF1C => self.output_level = (value >> 5) & 0b11,
-            0xFF1D => self.initial_period = (self.initial_period & 0xFF00) | value as u16,
-            0xFF1E => {
-                self.length_timer_enabled = value & 0b0100_0000 > 0;
-                self.initial_period =
-                    (self.initial_period & 0xFF) | (((value & 0b111) as u16) << 8);
-                if value & 0b1000_0000 > 0 {
-                    self.trigger();
-                }
-            }
-            0xFF30..=0xFF3F => self.wave_ram[(address - 0xFF30) as usize] = value,
-            _ => unreachable!(),
-        }
-    }
-
     pub fn update_length_timer(&mut self) {
-        if self.length_timer == 255 {
-            if self.length_timer_enabled {
+        if self.length_timer_enabled {
+            if self.length_timer == 0 {
                 self.on = false;
+            } else {
+                self.length_timer -= 1;
             }
-        } else {
-            self.length_timer += 1;
         }
     }
 
@@ -281,17 +292,62 @@ impl WaveChannel {
             self.period_div += 1;
         }
     }
+}
 
-    pub fn trigger(&mut self) {
-        self.on = true;
-        self.period = self.initial_period;
-        self.period_div = self.period;
-        if self.length_timer == 64 {
-            self.length_timer = self.initial_length_timer;
+impl Channel for WaveChannel {
+    fn read_register(&self, address: u16) -> u8 {
+        // Unused bits, length counters and frequencies are set to 1s when read back,
+        // as defined here: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware#Register_Reading
+        match address {
+            // NR30 (DAC)
+            0xFF1A => (self.on as u8) << 7 | 0x7F,
+            // NR31 (Length timer)
+            0xFF1B => 0xFF,
+            // NR32 (Output level)
+            0xFF1C => self.output_level << 5 | 0x9F,
+            // NR33 (Period low bits)
+            0xFF1D => 0xFF,
+            // NR34 (Control and period high bits)
+            0xFF1E => ((self.length_timer_enabled as u8) << 6) | 0xBF,
+            // Wave RAM
+            0xFF30..=0xFF3F => self.wave_ram[(address - 0xFF30) as usize],
+            _ => unreachable!(),
         }
     }
 
-    pub fn get_sample(&self) -> f32 {
+    fn write_register(&mut self, address: u16, value: u8) {
+        match address {
+            // NR30 (DAC)
+            0xFF1A => self.on = value & 0b1000_0000 > 0,
+            // NR31 (Length timer)
+            0xFF1B => self.initial_length_timer = 256 - (value as u16),
+            // NR32 (Output level)
+            0xFF1C => self.output_level = (value >> 5) & 0b11,
+            // NR33 (Period low bits)
+            0xFF1D => self.initial_period = (self.initial_period & 0xFF00) | value as u16,
+            // NR34 (Control and period high bits)
+            0xFF1E => {
+                self.length_timer_enabled = value & 0b0100_0000 > 0;
+                self.initial_period =
+                    (self.initial_period & 0xFF) | (((value & 0b111) as u16) << 8);
+                if value & 0b1000_0000 > 0 {
+                    self.trigger();
+                }
+            }
+            // Wave RAM
+            0xFF30..=0xFF3F => self.wave_ram[(address - 0xFF30) as usize] = value,
+            _ => unreachable!(),
+        }
+    }
+
+    fn trigger(&mut self) {
+        self.on = true;
+        self.period = self.initial_period;
+        self.period_div = self.period;
+        self.length_timer = self.initial_length_timer;
+    }
+
+    fn get_sample(&self) -> f32 {
         if self.on {
             let byte = self.wave_ram[(self.wave_pointer / 2) as usize];
             let nibble = if self.wave_pointer & 2 == 0 {
@@ -306,7 +362,7 @@ impl WaveChannel {
                 3 => nibble >> 2,
                 _ => unreachable!(),
             };
-            val as f32 / 15.0
+            self.convert_sample(val)
         } else {
             0.0
         }
@@ -341,7 +397,7 @@ impl NoiseChannel {
         Self {
             on: false,
             duty_cycle_pointer: 0,
-            length_timer: 64,
+            length_timer: 0,
             volume: 0,
             envelope_timer: 1,
             lfsr: 0,
@@ -360,65 +416,22 @@ impl NoiseChannel {
         }
     }
 
-    pub fn read_register(&self, address: u16) -> u8 {
-        match address {
-            0xFF20 => self.initial_length_timer,
-            0xFF21 => {
-                (self.initial_volume << 4)
-                    | ((self.envelope_increase as u8) << 3)
-                    | self.envelope_pace
-            }
-            0xFF22 => (self.clock_shift << 4) | ((self.short_lfsr as u8) << 3) | self.clock_divider,
-            0xFF23 => (self.length_timer_enabled as u8) << 6,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn write_register(&mut self, address: u16, value: u8) {
-        match address {
-            0xFF20 => self.initial_length_timer = value & 0b0011_1111,
-            0xFF21 => {
-                self.initial_volume = value >> 4;
-                self.envelope_increase = value & 0b1000 > 0;
-                self.envelope_pace = value & 0b0111;
-            }
-            0xFF22 => {
-                self.clock_shift = value >> 4;
-                self.short_lfsr = value & 0b1000 > 0;
-                self.clock_divider = value & 0b0111;
-                // Divider value 0 is treated as 0.5
-                self.lfsr_pace = if self.clock_divider == 0 {
-                    2u32.pow(self.clock_shift as u32) / 2
-                } else {
-                    (self.clock_divider as u32) * 2u32.pow(self.clock_shift as u32)
-                };
-            }
-            0xFF23 => {
-                self.length_timer_enabled = value & 0b0100_0000 > 0;
-                if value & 0b1000_0000 > 0 {
-                    self.trigger();
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
     pub fn update_length_timer(&mut self) {
-        if self.length_timer == 64 {
-            if self.length_timer_enabled {
+        if self.length_timer_enabled {
+            if self.length_timer == 0 {
                 self.on = false;
+            } else {
+                self.length_timer -= 1;
             }
-        } else {
-            self.length_timer += 1;
         }
     }
 
     pub fn update_envelope(&mut self) {
-        // Pace of 0 disables the envelope
+        let mut pace = self.envelope_pace;
         if self.envelope_pace == 0 {
-            return;
+            pace = 8;
         }
-        if self.envelope_timer < self.envelope_pace {
+        if self.envelope_timer < pace {
             self.envelope_timer += 1;
         } else {
             self.envelope_timer = 1;
@@ -448,8 +461,67 @@ impl NoiseChannel {
             self.lfsr_bit = self.lfsr & 0b1 > 0;
         }
     }
+}
 
-    pub fn trigger(&mut self) {
+impl Channel for NoiseChannel {
+    fn read_register(&self, address: u16) -> u8 {
+        // Unused bits, length counters and frequencies are set to 1s when read back,
+        // as defined here: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware#Register_Reading
+        match address {
+            // NR41 (Length timer)
+            0xFF20 => 0xFF,
+            // NR42 (Volume and envelope)
+            0xFF21 => {
+                (self.initial_volume << 4)
+                    | ((self.envelope_increase as u8) << 3)
+                    | self.envelope_pace
+            }
+            // NR43 (Frequency and randomness)
+            0xFF22 => (self.clock_shift << 4) | ((self.short_lfsr as u8) << 3) | self.clock_divider,
+            // NR44 (Control)
+            0xFF23 => (self.length_timer_enabled as u8) << 6 | 0xBF,
+            _ => unreachable!(),
+        }
+    }
+
+    fn write_register(&mut self, address: u16, value: u8) {
+        match address {
+            // NR41 (Length timer)
+            0xFF20 => self.initial_length_timer = 64 - (value & 0b0011_1111),
+            // NR42 (Volume and envelope)
+            0xFF21 => {
+                self.initial_volume = value >> 4;
+                self.envelope_increase = value & 0b1000 > 0;
+                self.envelope_pace = value & 0b0111;
+                // Setting envelope to decrease from 0 turns off the channel
+                if self.initial_volume == 0 && !self.envelope_increase {
+                    self.on = false;
+                }
+            }
+            // NR43 (Frequency and randomness)
+            0xFF22 => {
+                self.clock_shift = value >> 4;
+                self.short_lfsr = value & 0b1000 > 0;
+                self.clock_divider = value & 0b0111;
+                // Divider value 0 is treated as 0.5
+                self.lfsr_pace = if self.clock_divider == 0 {
+                    2u32.pow(self.clock_shift as u32) / 2
+                } else {
+                    (self.clock_divider as u32) * 2u32.pow(self.clock_shift as u32)
+                };
+            }
+            // NR44 (Control)
+            0xFF23 => {
+                self.length_timer_enabled = value & 0b0100_0000 > 0;
+                if value & 0b1000_0000 > 0 {
+                    self.trigger();
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn trigger(&mut self) {
         self.on = true;
         self.lfsr = 0;
         self.volume = self.initial_volume;
@@ -459,9 +531,13 @@ impl NoiseChannel {
         }
     }
 
-    pub fn get_sample(&self) -> f32 {
-        if self.on && self.lfsr_bit {
-            (self.volume as f32) / 15.0
+    fn get_sample(&self) -> f32 {
+        if self.on {
+            if self.lfsr_bit {
+                self.convert_sample(self.volume)
+            } else {
+                -1.0
+            }
         } else {
             0.0
         }
@@ -504,6 +580,8 @@ pub struct APU {
     #[serde(skip)]
     pub sample_delay: u32,
     #[serde(skip)]
+    pub hpf_capacitor_charge_factor: f32,
+    #[serde(skip)]
     pub channels: usize,
 
     pub on: bool,
@@ -514,6 +592,8 @@ pub struct APU {
     pub pan_options: PanRegister,
     pub left_volume: u8,
     pub right_volume: u8,
+    pub left_hpf_capacitor: f32,
+    pub right_hpf_capacitor: f32,
 
     pub square_channel_1: SquareChannel,
     pub square_channel_2: SquareChannel,
@@ -527,6 +607,7 @@ impl APU {
             buffer_producer: None,
             sample_delay: 0,
             channels: 0,
+            hpf_capacitor_charge_factor: 0.0,
 
             on: true,
             sample_delay_counter: 0,
@@ -536,6 +617,8 @@ impl APU {
             pan_options: PanRegister::from_bits_truncate(0),
             left_volume: 1,
             right_volume: 1,
+            left_hpf_capacitor: 0.0,
+            right_hpf_capacitor: 0.0,
 
             square_channel_1: SquareChannel::new(),
             square_channel_2: SquareChannel::new(),
@@ -544,8 +627,14 @@ impl APU {
         }
     }
 
+    const CLOCK_SPEED: u32 = 4194304;
+    const CAPACITOR_CHARGE_FACTOR: f64 = 0.999958;
+
     pub fn set_sample_rate(&mut self, sample_rate: u32) {
         self.sample_delay = Self::CLOCK_SPEED / sample_rate;
+        self.hpf_capacitor_charge_factor = Self::CAPACITOR_CHARGE_FACTOR
+            .powf((Self::CLOCK_SPEED as f64) / (sample_rate as f64))
+            as f32
     }
 
     pub fn init_buffer(&mut self, sample_capacity: usize, channels: usize) -> AudioBufferConsumer {
@@ -556,8 +645,6 @@ impl APU {
         self.buffer_producer = Some(producer);
         consumer
     }
-
-    const CLOCK_SPEED: u32 = 4194304;
 
     pub fn cycle(&mut self, timer_div: u16) {
         // Increment DIV-APU when DIV register bit 4 (actual divider bit 12)
@@ -623,7 +710,7 @@ impl APU {
             let ch3 = self.wave_channel.get_sample();
             let ch4 = self.noise_channel.get_sample();
 
-            // Calculate left and right output
+            // Combine left and right channels
             let mut left_sample = 0f32;
             if self.pan_options.intersects(PanRegister::CH1_LEFT) {
                 left_sample += ch1;
@@ -637,8 +724,6 @@ impl APU {
             if self.pan_options.intersects(PanRegister::CH4_LEFT) {
                 left_sample += ch4;
             }
-            left_sample *= (self.left_volume as f32) / 8.0;
-
             let mut right_sample = 0f32;
             if self.pan_options.intersects(PanRegister::CH1_RIGHT) {
                 right_sample += ch1;
@@ -652,60 +737,123 @@ impl APU {
             if self.pan_options.intersects(PanRegister::CH4_RIGHT) {
                 right_sample += ch4;
             }
-            right_sample *= (self.right_volume as f32) / 8.0;
+
+            // Apply volume
+            left_sample *= self.left_volume as f32;
+            right_sample *= self.right_volume as f32;
+
+            // Apply a high pass filter by simulating a capacitor
+            let left_output = left_sample - self.left_hpf_capacitor;
+            self.left_hpf_capacitor =
+                (left_sample - left_output) * self.hpf_capacitor_charge_factor;
+            let right_output = right_sample - self.right_hpf_capacitor;
+            self.right_hpf_capacitor =
+                (right_sample - right_output) * self.hpf_capacitor_charge_factor;
+
+            // Scale final mixed sample in between -1.0 and 1.0
+            // Maximum analog value can be:
+            // +1.0 (max channel output voltage)
+            // * 4  (max amount of channels outputting at once)
+            // * 8  (max master volume)
+            left_sample /= 32.0;
+            right_sample /= 32.0;
 
             // If output has two channels, send sound as stereo
             if self.channels == 2 {
-                let _ = buffer.try_push(left_sample * 0.1);
-                let _ = buffer.try_push(right_sample * 0.1);
+                let _ = buffer.try_push(left_output);
+                let _ = buffer.try_push(right_output);
             }
-            // Otherwise treat sound as mono, regardless of amount of channels
+            // Otherwise merge sound into mono
             else {
                 for _ in 0..self.channels {
-                    let _ = buffer.try_push((left_sample + right_sample) / 2.0);
+                    let _ = buffer.try_push((left_sample / 2.0) + (right_sample / 2.0));
                 }
             }
         }
+    }
+
+    fn turn_off(&mut self) {
+        self.on = false;
+        // Reset registers
+        self.sample_delay_counter = 0;
+        self.period_delay_counter = 0;
+        self.div_apu = 0;
+        self.last_div_bit = false;
+        self.pan_options = PanRegister::from_bits_truncate(0);
+        self.left_volume = 1;
+        self.right_volume = 1;
+        // Reset channel registers
+        self.square_channel_1 = SquareChannel::new();
+        self.square_channel_2 = SquareChannel::new();
+        let wave_ram = self.wave_channel.wave_ram;
+        self.wave_channel = WaveChannel::new();
+        self.wave_channel.wave_ram = wave_ram;
+        self.noise_channel = NoiseChannel::new();
     }
 }
 
 impl MemoryAccess for APU {
     fn mem_read(&self, address: u16) -> u8 {
         match address {
-            0xFF10..=0xFF14 => self.square_channel_1.read_register(address - 0xFF10),
-            0xFF16..=0xFF19 => self.square_channel_2.read_register(address - 0xFF15),
+            // NR10 - NR14
+            0xFF10..=0xFF14 => self.square_channel_1.read_register(address),
+            // NR21 - NR24
+            0xFF16..=0xFF19 => self.square_channel_2.read_register(address),
+            // NR30 - NR34 + Wave RAM
             0xFF1A..=0xFF1E | 0xFF30..=0xFF3F => self.wave_channel.read_register(address),
+            // NR41 - NR44
             0xFF20..=0xFF23 => self.noise_channel.read_register(address),
+            // NR50 - Master volume
             0xFF24 => ((self.left_volume - 1) << 4) | (self.right_volume - 1),
+            // NR51 - Sound panning
             0xFF25 => self.pan_options.bits(),
+            // NR52 - Master control
             0xFF26 => {
                 ((self.on as u8) << 7)
+                    | ((self.noise_channel.on as u8) << 3)
+                    | ((self.wave_channel.on as u8) << 2)
                     | ((self.square_channel_2.on as u8) << 1)
                     | (self.square_channel_1.on as u8)
+                    | 0x70
             }
             _ => 0xFF,
         }
     }
 
     fn mem_write(&mut self, address: u16, value: u8) {
+        // Registers apart from master control and wave RAM cant be written to
+        // when APU is turned off
+        if !self.on && !matches!(address, 0xFF26 | 0xFF30..=0xFF3F) {
+            return;
+        }
         match address {
+            // NR10 - NR14
             0xFF10..=0xFF14 => {
-                self.square_channel_1
-                    .write_register(address - 0xFF10, value);
+                self.square_channel_1.write_register(address, value);
             }
+            // NR21 - NR24
             0xFF16..=0xFF19 => {
-                self.square_channel_2
-                    .write_register(address - 0xFF15, value);
+                self.square_channel_2.write_register(address, value);
             }
+            // NR30 - NR34 + Wave RAM
             0xFF1A..=0xFF1E | 0xFF30..=0xFF3F => self.wave_channel.write_register(address, value),
+            // NR41 - NR44
             0xFF20..=0xFF23 => self.noise_channel.write_register(address, value),
+            // NR50 - Master volume
             0xFF24 => {
                 self.left_volume = ((value >> 4) & 0b111) + 1;
                 self.right_volume = (value & 0b111) + 1;
             }
+            // NR51 - Sound panning
             0xFF25 => self.pan_options = PanRegister::from_bits_truncate(value),
+            // NR52 - Master control
             0xFF26 => {
-                self.on = value & 0b1000_0000 > 0;
+                let on = value & 0b1000_0000 > 0;
+                if self.on && !on {
+                    self.turn_off();
+                } else {
+                    self.on = on;
+                }
             }
             _ => {}
         }
