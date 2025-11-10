@@ -1,8 +1,7 @@
 <script lang="ts">
   import Fuse from "fuse.js";
   import EmulatorManager from "./manager.svelte";
-  let { manager, onback }: { manager: EmulatorManager; onback: () => void } =
-    $props();
+  let { manager }: { manager: EmulatorManager } = $props();
   import homebrewRoms from "../roms/homebrewhub.json";
 
   interface ROMInfo {
@@ -55,12 +54,6 @@
 
 <div class="browser-container">
   <div class="browser-topbar">
-    <button
-      style="white-space:nowrap"
-      onclick={() => {
-        onback();
-      }}>{"< Back"}</button
-    >
     <div class="browser-filters">
       <p>Filters:</p>
       <input type="checkbox" bind:checked={games} />

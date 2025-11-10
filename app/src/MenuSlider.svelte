@@ -4,14 +4,12 @@
     min,
     max,
     step,
-    label,
     valueLabelCallback,
   }: {
     value: { value: number; effect: (val: number) => void };
     min: number;
     max: number;
     step: number;
-    label: string;
     valueLabelCallback?: (value: number) => string;
   } = $props();
 
@@ -25,8 +23,7 @@
   });
 </script>
 
-<div class="menu-row">
-  <p style="text-align:right">{label}</p>
+<div class="slider-row">
   <input
     type="range"
     bind:value={value.value}
@@ -35,5 +32,5 @@
     {step}
     style="width: 250px"
   />
-  <p>{valueLabel}</p>
+  <p style="width: 5rem;">{valueLabel}</p>
 </div>

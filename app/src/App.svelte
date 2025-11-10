@@ -7,34 +7,102 @@
   import { onMount } from "svelte";
 
   let manager = new EmulatorManager();
-  let browserVisible = $state(false);
+  let currentPage = $state(0);
 
-  const inputMap: Record<string, string> = {
-    Right: "ArrowRight",
-    Left: "ArrowLeft",
-    Up: "ArrowUp",
-    Down: "ArrowDown",
-    A: "x",
-    B: "z",
-    Select: "Backspace",
-    Start: "Enter",
-  };
+  let transitionsEnabled = $state(true);
+  let transitionDuration = 300;
+  let transitionLength = 200;
+  let lastPage = 0;
+  function getTransition() {
+    if (!transitionsEnabled) {
+      return { y: 0, duration: 0 };
+    }
+    let sign = currentPage > lastPage ? 1 : -1;
+    lastPage = currentPage;
+    return { y: sign * transitionLength, duration: transitionDuration };
+  }
+
+  class Keybind {
+    public name: string;
+    public input: string;
+    constructor(name: string, input: string) {
+      this.name = name;
+      this.input = input;
+    }
+  }
+
+  const inputMap = $state([
+    new Keybind("Left", "ArrowLeft"),
+    new Keybind("Right", "ArrowRight"),
+    new Keybind("Up", "ArrowUp"),
+    new Keybind("Down", "ArrowDown"),
+    new Keybind("A", "x"),
+    new Keybind("B", "z"),
+    new Keybind("Select", "Backspace"),
+    new Keybind("Start", "Enter"),
+  ]);
+  const keybindMap = $state([
+    new Keybind("Zoom in", "+"),
+    new Keybind("Zoom out", "-"),
+  ]);
+  function getKey(event: KeyboardEvent) {
+    if (event.key === " ") {
+      return "Space";
+    } else {
+      return event.key;
+    }
+  }
   function handleKey(event: KeyboardEvent, pressed: boolean) {
-    if (pressed && event.key === "Escape") {
+    if (rebindableInput) {
+      if (getKey(event) === "Escape") {
+        rebindableInput = undefined;
+        return;
+      }
+      let keybind = inputMap.find((input) => input.name == rebindableInput);
+      if (!keybind) {
+        keybind = keybindMap.find((input) => input.name == rebindableInput);
+      }
+      if (!keybind) {
+        return;
+      }
+      keybind.input = getKey(event);
+      rebindableInput = undefined;
+    }
+    if (pressed && getKey(event) === "Escape") {
       if (!manager.initialized) {
         return;
       }
       manager.toggle_execution();
       if (!manager.running) {
-        browserVisible = false;
+        currentPage = 0;
       }
     }
-    for (let key of Object.keys(inputMap)) {
-      if (inputMap[key] === event.key) {
-        manager.updateInput(key, pressed);
+    inputMap.forEach((input) => {
+      if (input.input === getKey(event)) {
+        manager.updateInput(input.name, pressed);
       }
+    });
+    if (pressed) {
+      keybindMap.forEach((keybind) => {
+        if (keybind.input === getKey(event)) {
+          switch (keybind.name) {
+            case "Zoom in":
+              scaleSliderVal.value = Math.min(scaleSliderVal.value + 1, 5);
+              manager.options.scale = scaleSliderVal.value;
+              manager.updateOptions();
+              break;
+            case "Zoom out":
+              scaleSliderVal.value = Math.max(scaleSliderVal.value - 1, -5);
+              manager.options.scale = scaleSliderVal.value;
+              manager.updateOptions();
+              break;
+          }
+        }
+      });
     }
   }
+
+  let rebindableInput: string | undefined = $state(undefined);
 
   const palettes: Record<string, Palette> = {
     LCD: new Palette(
@@ -162,9 +230,10 @@
     popupVisible = true;
     setTimeout(() => {
       popupVisible = false;
-    }, 3000);
+    }, 2000);
   }
 
+  let firstLoad = true;
   let eventListener: HTMLElement;
   onMount(() => {
     if (eventListener) {
@@ -172,6 +241,10 @@
         const event = e as CustomEvent;
         document.title = `${event.detail} - DMG-2025`;
         console.info("Successfully loaded ROM");
+        if (firstLoad) {
+          showMessage("Press Esc to return to menu");
+          firstLoad = false;
+        }
         manager.toggle_execution();
       });
       eventListener.addEventListener("romloadfailed", (e) => {
@@ -194,19 +267,111 @@
   {#if popupVisible}
     <p
       class="popup"
-      in:fly={{ y: 30, duration: 300 }}
-      out:fade={{ duration: 1000 }}
+      in:fly={{ y: 200, duration: 600 }}
+      out:fade={{ duration: 2000 }}
     >
       {popupText}
     </p>
   {/if}
   <canvas id="canvas" tabindex="-1"></canvas>
   {#if !manager.running}
-    <div class="menu" transition:fade={{ duration: 100 }}>
-      {#if browserVisible}
-        <Browser {manager} onback={() => (browserVisible = false)} />
+    <div
+      class="menu"
+      transition:fade={{ duration: transitionsEnabled ? 100 : 0 }}
+    >
+      <div class="menu-sidebar">
+        <button onclick={() => (currentPage = 0)}>MAIN</button>
+        <button onclick={() => (currentPage = 1)}>BROWSER</button>
+        <button onclick={() => (currentPage = 2)}>VISUALS</button>
+        <button onclick={() => (currentPage = 3)}>INPUT</button>
+      </div>
+      {#if currentPage == 1}
+        <div class="menu-container" in:fly={getTransition()}>
+          <Browser {manager} />
+        </div>
+      {:else if currentPage == 2}
+        <div class="menu-container" in:fly={getTransition()}>
+          <div class="menu-grid">
+            <h3>General</h3>
+            <p>Scaling offset:</p>
+            <MenuSlider value={scaleSliderVal} min={-5} max={5} step={1} />
+            <p>Color palette:</p>
+            <button onclick={swapPalette}>{currentPalette}</button>
+            <p>UI transitions:</p>
+            <button onclick={() => (transitionsEnabled = !transitionsEnabled)}>
+              {transitionsEnabled ? "On" : "Off"}
+            </button>
+
+            <h3>Glow</h3>
+            <p>BG strength:</p>
+            <MenuSlider
+              value={backgroundGlowStrengthSliderVal}
+              min={0}
+              max={100}
+              step={1}
+              valueLabelCallback={(value) => `${value}%`}
+            />
+            <p>Display strength:</p>
+            <MenuSlider
+              value={displayGlowStrengthSliderVal}
+              min={0}
+              max={100}
+              step={1}
+              valueLabelCallback={(value) => `${value}%`}
+            />
+            <p>Quality:</p>
+            <MenuSlider
+              value={glowQualitySliderVal}
+              min={0}
+              max={10}
+              step={1}
+            />
+            <p>Radius:</p>
+            <MenuSlider
+              value={glowRadiusSliderVal}
+              min={0}
+              max={5}
+              step={0.1}
+            />
+            <p>Ambient light:</p>
+            <MenuSlider
+              value={ambientLightSliderVal}
+              min={0}
+              max={1}
+              step={0.01}
+            />
+          </div>
+        </div>
+      {:else if currentPage == 3}
+        <div class="menu-container" in:fly={getTransition()}>
+          <div class="menu-grid" style="grid-template-columns: 10rem 15rem">
+            <h3>Controls</h3>
+            {#each inputMap as input (input.name)}
+              <p>{input.name}</p>
+              {#if rebindableInput == input.name}
+                <button style="color:grey">[ Rebinding... ]</button>
+              {:else}
+                <button onclick={() => (rebindableInput = input.name)}
+                  >{input.input}</button
+                >
+              {/if}
+            {/each}
+
+            <h3>Keybinds</h3>
+            {#each keybindMap as input (input.name)}
+              <p>{input.name}</p>
+              {#if rebindableInput == input.name}
+                <button style="color:grey">[ Rebinding... ]</button>
+              {:else}
+                <button onclick={() => (rebindableInput = input.name)}
+                  >{input.input}</button
+                >
+              {/if}
+            {/each}
+          </div>
+        </div>
       {:else}
-        <div class="menu-container">
+        <div class="menu-container" in:fly={getTransition()}>
           <input
             id="fileInput"
             accept=".gb,.zip"
@@ -220,80 +385,30 @@
             >
               Load ROM
             </button>
-            <button onclick={() => (browserVisible = true)}
+            <button onclick={() => (currentPage = 1)}
               >Browse Homebrew Hub</button
             >
           </div>
           <p style="height: 50px"></p>
 
-          <MenuSlider
-            value={speedSliderVal}
-            min={0}
-            max={speedSliderValues.length - 1}
-            step={1}
-            label="Speed:"
-            valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
-          />
-          <MenuSlider
-            value={volumeSliderVal}
-            min={0}
-            max={200}
-            step={1}
-            label="Volume:"
-            valueLabelCallback={(value) => `${value}%`}
-          />
-          <MenuSlider
-            value={scaleSliderVal}
-            min={-5}
-            max={5}
-            step={1}
-            label="Scale offset:"
-          />
-          <div class="menu-row">
-            <p style="text-align:right">Palette:</p>
-            <button onclick={swapPalette}>{currentPalette}</button>
+          <div class="menu-grid">
+            <p>Volume:</p>
+            <MenuSlider
+              value={volumeSliderVal}
+              min={0}
+              max={200}
+              step={1}
+              valueLabelCallback={(value) => `${value}%`}
+            />
+            <p>Emulation speed:</p>
+            <MenuSlider
+              value={speedSliderVal}
+              min={0}
+              max={speedSliderValues.length - 1}
+              step={1}
+              valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
+            />
           </div>
-
-          <p style="text-align:center; margin-top: 20px;">Glow Options</p>
-
-          <MenuSlider
-            value={backgroundGlowStrengthSliderVal}
-            min={0}
-            max={100}
-            step={1}
-            label="BG strength:"
-            valueLabelCallback={(value) => `${value}%`}
-          />
-          <MenuSlider
-            value={displayGlowStrengthSliderVal}
-            min={0}
-            max={100}
-            step={1}
-            label="Display strength:"
-            valueLabelCallback={(value) => `${value}%`}
-          />
-          <MenuSlider
-            value={glowQualitySliderVal}
-            min={0}
-            max={10}
-            step={1}
-            label="Quality:"
-          />
-
-          <MenuSlider
-            value={glowRadiusSliderVal}
-            min={0}
-            max={5}
-            step={0.1}
-            label="Radius:"
-          />
-          <MenuSlider
-            value={ambientLightSliderVal}
-            min={0}
-            max={1}
-            step={0.01}
-            label="Ambient light:"
-          />
         </div>
       {/if}
     </div>
