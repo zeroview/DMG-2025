@@ -26,7 +26,8 @@ pub trait Channel {
 #[derive(Deserialize, Serialize)]
 pub struct SquareChannel {
     // State variables
-    pub on: bool,
+    pub channel_on: bool,
+    pub dac_on: bool,
     pub period_div: u16,
     pub duty_cycle_pointer: u8,
     pub length_timer: u8,
@@ -50,7 +51,8 @@ pub struct SquareChannel {
 impl SquareChannel {
     pub fn new() -> Self {
         Self {
-            on: false,
+            channel_on: false,
+            dac_on: false,
             period_div: 0,
             duty_cycle_pointer: 0,
             length_timer: 0,
@@ -75,7 +77,7 @@ impl SquareChannel {
     pub fn update_length_timer(&mut self) {
         if self.length_timer_enabled {
             if self.length_timer == 0 {
-                self.on = false;
+                self.channel_on = false;
             } else {
                 self.length_timer -= 1;
             }
@@ -98,17 +100,16 @@ impl SquareChannel {
             }
             if self.period > 0x7FF {
                 self.period = 0x7FF;
-                self.on = false;
+                self.channel_on = false;
             }
         }
     }
 
     pub fn update_envelope(&mut self) {
-        let mut pace = self.envelope_pace;
         if self.envelope_pace == 0 {
-            pace = 8;
+            return;
         }
-        if self.envelope_timer < pace {
+        if self.envelope_timer < self.envelope_pace {
             self.envelope_timer += 1;
         } else {
             self.envelope_timer = 1;
@@ -196,9 +197,11 @@ impl Channel for SquareChannel {
                 self.initial_volume = value >> 4;
                 self.envelope_increase = value & 0b1000 > 0;
                 self.envelope_pace = value & 0b0111;
-                // Setting envelope to decrease from 0 turns off the channel
-                if self.initial_volume == 0 && !self.envelope_increase {
-                    self.on = false;
+                // Channel volume unit is controlled by these control bits
+                // If envelope is set to decrease volume from 0, the DAC is off
+                self.dac_on = self.initial_volume > 0 || self.envelope_increase;
+                if !self.dac_on {
+                    self.channel_on = false;
                 }
             }
             // NR13 / NR23 (Period low bits)
@@ -217,20 +220,23 @@ impl Channel for SquareChannel {
     }
 
     fn trigger(&mut self) {
-        self.on = true;
+        self.channel_on = self.dac_on;
         self.period = self.initial_period;
         self.period_div = self.period;
         self.volume = self.initial_volume;
         self.envelope_timer = 1;
         self.sweep_timer = 1;
-        if self.length_timer == 64 {
-            self.length_timer = self.initial_length_timer;
-        }
+        self.length_timer = 64;
     }
 
     fn get_sample(&self) -> f32 {
-        if self.on {
-            self.convert_sample(self.volume * self.get_duty_cycle_val(self.duty_cycle_pointer))
+        if self.dac_on {
+            let volume = if self.channel_on {
+                self.volume * self.get_duty_cycle_val(self.duty_cycle_pointer)
+            } else {
+                0
+            };
+            self.convert_sample(volume)
         } else {
             0.0
         }
@@ -240,7 +246,8 @@ impl Channel for SquareChannel {
 #[derive(Deserialize, Serialize)]
 pub struct WaveChannel {
     // State variables
-    pub on: bool,
+    pub dac_on: bool,
+    pub channel_on: bool,
     pub period_div: u16,
     pub wave_pointer: u8,
     pub length_timer: u16,
@@ -256,7 +263,8 @@ pub struct WaveChannel {
 impl WaveChannel {
     pub fn new() -> Self {
         Self {
-            on: false,
+            dac_on: false,
+            channel_on: false,
             period_div: 0,
             wave_pointer: 0,
             length_timer: 0,
@@ -273,7 +281,7 @@ impl WaveChannel {
     pub fn update_length_timer(&mut self) {
         if self.length_timer_enabled {
             if self.length_timer == 0 {
-                self.on = false;
+                self.channel_on = false;
             } else {
                 self.length_timer -= 1;
             }
@@ -300,7 +308,7 @@ impl Channel for WaveChannel {
         // as defined here: https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware#Register_Reading
         match address {
             // NR30 (DAC)
-            0xFF1A => (self.on as u8) << 7 | 0x7F,
+            0xFF1A => (self.dac_on as u8) << 7 | 0x7F,
             // NR31 (Length timer)
             0xFF1B => 0xFF,
             // NR32 (Output level)
@@ -318,7 +326,12 @@ impl Channel for WaveChannel {
     fn write_register(&mut self, address: u16, value: u8) {
         match address {
             // NR30 (DAC)
-            0xFF1A => self.on = value & 0b1000_0000 > 0,
+            0xFF1A => {
+                self.dac_on = value & 0b1000_0000 > 0;
+                if !self.dac_on {
+                    self.channel_on = false;
+                }
+            }
             // NR31 (Length timer)
             0xFF1B => self.initial_length_timer = 256 - (value as u16),
             // NR32 (Output level)
@@ -341,28 +354,33 @@ impl Channel for WaveChannel {
     }
 
     fn trigger(&mut self) {
-        self.on = true;
+        self.channel_on = self.dac_on;
         self.period = self.initial_period;
         self.period_div = self.period;
-        self.length_timer = self.initial_length_timer;
+        self.length_timer = 256;
+        self.wave_pointer = 0;
     }
 
     fn get_sample(&self) -> f32 {
-        if self.on {
-            let byte = self.wave_ram[(self.wave_pointer / 2) as usize];
-            let nibble = if self.wave_pointer & 2 == 0 {
-                byte >> 4
+        if self.dac_on {
+            let volume = if self.channel_on {
+                let byte = self.wave_ram[(self.wave_pointer / 2) as usize];
+                let nibble = if self.wave_pointer & 2 == 0 {
+                    byte >> 4
+                } else {
+                    byte & 0xF
+                };
+                match self.output_level {
+                    0 => 0,
+                    1 => nibble,
+                    2 => nibble >> 1,
+                    3 => nibble >> 2,
+                    _ => unreachable!(),
+                }
             } else {
-                byte & 0xF
+                0
             };
-            let val = match self.output_level {
-                0 => 0,
-                1 => nibble,
-                2 => nibble >> 1,
-                3 => nibble >> 2,
-                _ => unreachable!(),
-            };
-            self.convert_sample(val)
+            self.convert_sample(volume)
         } else {
             0.0
         }
@@ -372,7 +390,8 @@ impl Channel for WaveChannel {
 #[derive(Deserialize, Serialize)]
 pub struct NoiseChannel {
     // State variables
-    pub on: bool,
+    pub dac_on: bool,
+    pub channel_on: bool,
     pub duty_cycle_pointer: u8,
     pub length_timer: u8,
     pub volume: u8,
@@ -395,7 +414,8 @@ pub struct NoiseChannel {
 impl NoiseChannel {
     pub fn new() -> Self {
         Self {
-            on: false,
+            channel_on: false,
+            dac_on: false,
             duty_cycle_pointer: 0,
             length_timer: 0,
             volume: 0,
@@ -419,7 +439,7 @@ impl NoiseChannel {
     pub fn update_length_timer(&mut self) {
         if self.length_timer_enabled {
             if self.length_timer == 0 {
-                self.on = false;
+                self.channel_on = false;
             } else {
                 self.length_timer -= 1;
             }
@@ -427,11 +447,10 @@ impl NoiseChannel {
     }
 
     pub fn update_envelope(&mut self) {
-        let mut pace = self.envelope_pace;
         if self.envelope_pace == 0 {
-            pace = 8;
+            return;
         }
-        if self.envelope_timer < pace {
+        if self.envelope_timer < self.envelope_pace {
             self.envelope_timer += 1;
         } else {
             self.envelope_timer = 1;
@@ -493,9 +512,11 @@ impl Channel for NoiseChannel {
                 self.initial_volume = value >> 4;
                 self.envelope_increase = value & 0b1000 > 0;
                 self.envelope_pace = value & 0b0111;
-                // Setting envelope to decrease from 0 turns off the channel
-                if self.initial_volume == 0 && !self.envelope_increase {
-                    self.on = false;
+                // Channel volume unit is controlled by these control bits
+                // If envelope is set to decrease volume from 0, the DAC is off
+                self.dac_on = self.initial_volume > 0 || self.envelope_increase;
+                if !self.dac_on {
+                    self.channel_on = false;
                 }
             }
             // NR43 (Frequency and randomness)
@@ -522,22 +543,21 @@ impl Channel for NoiseChannel {
     }
 
     fn trigger(&mut self) {
-        self.on = true;
+        self.channel_on = self.dac_on;
         self.lfsr = 0;
         self.volume = self.initial_volume;
         self.envelope_timer = 1;
-        if self.length_timer == 64 {
-            self.length_timer = self.initial_length_timer;
-        }
+        self.length_timer = 64;
     }
 
     fn get_sample(&self) -> f32 {
-        if self.on {
-            if self.lfsr_bit {
-                self.convert_sample(self.volume)
+        if self.dac_on {
+            let volume = if self.channel_on && self.lfsr_bit {
+                self.volume
             } else {
-                -1.0
-            }
+                0
+            };
+            self.convert_sample(volume)
         } else {
             0.0
         }
@@ -696,8 +716,13 @@ impl APU {
         if let Some(buffer) = &mut self.buffer_producer {
             self.sample_delay_counter = 0;
 
-            // If APU is turned off, just push silence to the buffer
-            if !self.on {
+            // If APU or all DACs are turned off, just push silence to the buffer
+            if !self.on
+                || (!self.square_channel_1.dac_on
+                    && !self.square_channel_2.dac_on
+                    && !self.wave_channel.dac_on
+                    && !self.noise_channel.dac_on)
+            {
                 for _ in 0..self.channels {
                     let _ = buffer.try_push(0.0);
                 }
@@ -810,10 +835,10 @@ impl MemoryAccess for APU {
             // NR52 - Master control
             0xFF26 => {
                 ((self.on as u8) << 7)
-                    | ((self.noise_channel.on as u8) << 3)
-                    | ((self.wave_channel.on as u8) << 2)
-                    | ((self.square_channel_2.on as u8) << 1)
-                    | (self.square_channel_1.on as u8)
+                    | ((self.noise_channel.channel_on as u8) << 3)
+                    | ((self.wave_channel.dac_on as u8) << 2)
+                    | ((self.square_channel_2.channel_on as u8) << 1)
+                    | (self.square_channel_1.channel_on as u8)
                     | 0x70
             }
             _ => 0xFF,
