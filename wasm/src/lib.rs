@@ -16,7 +16,6 @@ mod proxy;
 use proxy::*;
 
 const CANVAS_ID: &str = "canvas";
-const EVENT_LISTENER_ID: &str = "eventListener";
 
 #[wasm_bindgen]
 pub fn spawn_event_loop() -> Result<Proxy, JsValue> {
@@ -37,9 +36,9 @@ pub fn spawn_event_loop() -> Result<Proxy, JsValue> {
 
 pub struct App {
     proxy: Option<winit::event_loop::EventLoopProxy<UserEvent>>,
-    dom_event_target: Option<web_sys::Element>,
     renderer: Option<Renderer>,
     options: EmulatorOptions,
+    callbacks: ProxyCallbacks,
     audio: AudioHandler,
     input_state: InputFlag,
     cpu: Option<CPU>,
@@ -50,7 +49,7 @@ impl App {
     pub fn new(event_loop: &EventLoop<UserEvent>) -> Self {
         Self {
             proxy: Some(event_loop.create_proxy()),
-            dom_event_target: None,
+            callbacks: ProxyCallbacks::default(),
             renderer: None,
             options: EmulatorOptions::default(),
             audio: AudioHandler::new(),
@@ -63,16 +62,6 @@ impl App {
     fn get_document() -> web_sys::Document {
         web_sys::window().unwrap_throw().document().unwrap_throw()
     }
-
-    fn send_dom_event(&self, event_name: &str, detail: JsValue) -> Result<(), JsValue> {
-        if let Some(target) = &self.dom_event_target {
-            let init = web_sys::CustomEventInit::new();
-            init.set_detail(&detail);
-            let event = web_sys::CustomEvent::new_with_event_init_dict(event_name, &init)?;
-            target.dispatch_event(&event.into())?;
-        }
-        Ok(())
-    }
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -84,7 +73,6 @@ impl ApplicationHandler<UserEvent> for App {
         use winit::platform::web::WindowAttributesExtWebSys;
 
         let document = Self::get_document();
-        self.dom_event_target = document.get_element_by_id(EVENT_LISTENER_ID);
         let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
         let html_canvas_element = canvas.unchecked_into();
         window_attributes = window_attributes.with_canvas(Some(html_canvas_element));
@@ -192,25 +180,39 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(rom) = rom {
                     match CPU::new(rom) {
                         Ok(mut cpu) => {
-                            let _ = self.send_dom_event(
-                                "romloaded",
-                                JsValue::from(cpu.get_cartridge_title()),
-                            );
+                            self.callbacks.rom_loaded.as_ref().inspect(|callback| {
+                                let _ = callback.call2(
+                                    &JsValue::null(),
+                                    &true.into(),
+                                    &cpu.get_cartridge_title().into(),
+                                );
+                            });
                             // Initialize audio playback
                             cpu.set_audio_sample_rate(self.audio.sample_rate);
                             let audio_consumer = cpu
                                 .init_audio_buffer(self.audio.sample_capacity, self.audio.channels);
                             self.audio.init_playback(audio_consumer);
                             self.cpu = Some(cpu);
+                            self.renderer.as_ref().unwrap().window.request_redraw();
                         }
                         Err(e) => {
-                            let _ =
-                                self.send_dom_event("romloadfailed", JsValue::from(e.to_string()));
+                            self.callbacks.rom_loaded.as_ref().inspect(|callback| {
+                                let _ = callback.call2(
+                                    &JsValue::null(),
+                                    &false.into(),
+                                    &e.to_string().into(),
+                                );
+                            });
                         }
                     }
                 } else {
-                    let _ = self
-                        .send_dom_event("romloadfailed", JsValue::from("Zip archive is invalid"));
+                    self.callbacks.rom_loaded.as_ref().inspect(|callback| {
+                        let _ = callback.call2(
+                            &JsValue::null(),
+                            &false.into(),
+                            &"Zip archive is invalid".into(),
+                        );
+                    });
                 }
             }
             UserEvent::RunCPU(millis) => {
@@ -259,6 +261,9 @@ impl ApplicationHandler<UserEvent> for App {
                 *self.audio.volume.write().unwrap() = options.volume;
 
                 self.options = options;
+            }
+            UserEvent::SetCallbacks(callbacks) => {
+                self.callbacks = callbacks;
             }
             UserEvent::Test(string) => {
                 log::info!("Test from JS: {}", &string);

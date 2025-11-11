@@ -1,20 +1,27 @@
 
-import { spawn_event_loop, Proxy, EmulatorOptions } from "DMG-2025";
+import { spawn_event_loop, Proxy, EmulatorOptions, ProxyCallbacks, } from "DMG-2025";
+import type Options from "./options.svelte";
+import { palettes, paletteNames } from "./options.svelte";
 
 export default class EmulatorManager {
   private proxy: Proxy | undefined = undefined;
+  private callbacks: ProxyCallbacks = new ProxyCallbacks();
   private lastFrameTime = 0;
+  private speed = 0;
 
   public initialized = false;
   public running = $state(false);
-  public options = new EmulatorOptions();
 
+  initialize = (options: Options) => {
+    this.proxy = spawn_event_loop();
+    this.updateOptions(options);
+    this.proxy.set_callbacks(this.callbacks);
+    this.initialized = true;
+  }
 
   loadRom = (rom: ArrayBuffer, isZip: boolean) => {
     if (!this.initialized) {
-      this.proxy = spawn_event_loop();
-      this.updateOptions();
-      this.initialized = true;
+      throw new ReferenceError("Emulator is not initialized");
     }
 
     this.proxy?.load_rom(new Uint8Array(rom), isZip);
@@ -29,14 +36,14 @@ export default class EmulatorManager {
     this.proxy?.set_paused(!this.running);
     if (this.running) {
       this.lastFrameTime = performance.now();
-      window.requestAnimationFrame(this.frame);
+      window.requestAnimationFrame(this.runEmulator);
     }
   }
 
   /**
    * Progresses emulator for the duration it took to make last frame
    */
-  private frame = () => {
+  private runEmulator = () => {
     if (!this.running) {
       return;
     }
@@ -44,16 +51,31 @@ export default class EmulatorManager {
     let millis = Math.min(17, Math.max(0, currentTime - this.lastFrameTime));
     this.lastFrameTime = currentTime;
 
-    this.proxy?.run_cpu(this.options.speed * millis);
+    this.proxy?.run_cpu(this.speed * millis);
     console.info(`Executed CPU for ${millis} ms`);
-    window.requestAnimationFrame(this.frame);
+    window.requestAnimationFrame(this.runEmulator);
+  }
+
+  updateOptions = (options: Options) => {
+    let emuOptions = new EmulatorOptions();
+    emuOptions.update_palette(palettes[paletteNames[options.paletteIndex]])
+    emuOptions.speed = this.speed = options.speed;
+    emuOptions.volume = options.volume / 100;
+    emuOptions.scale_offset = options.scaleOffset;
+    emuOptions.background_glow_strength = options.backgroundGlowStrength / 100;
+    emuOptions.display_glow_strength = options.displayGlowStrength / 100;
+    emuOptions.glow_iterations = options.glowQuality * 2;
+    emuOptions.glow_radius = options.glowRadius;
+    emuOptions.ambient_light = options.ambientLight;
+    this.proxy?.update_options(emuOptions);
   }
 
   updateInput = (key: string, pressed: boolean) => {
     this.proxy?.update_input(key, pressed);
   }
 
-  updateOptions = () => {
-    this.proxy?.update_options(this.options);
+  onRomLoaded = (callback: (success: boolean, info: string) => void) => {
+    this.callbacks.set_rom_loaded(callback);
+    this.proxy?.set_callbacks(this.callbacks);
   }
 }

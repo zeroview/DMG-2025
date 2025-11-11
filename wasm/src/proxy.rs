@@ -1,5 +1,6 @@
 use super::*;
 use serde::{Deserialize, Serialize};
+use web_sys::js_sys;
 
 /// A color in linear RGB space
 #[wasm_bindgen]
@@ -50,12 +51,12 @@ impl Default for Palette {
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct EmulatorOptions {
     pub palette: Palette,
     pub speed: f32,
     pub volume: f32,
-    pub scale: i32,
+    pub scale_offset: i32,
     pub display_glow_strength: f32,
     pub background_glow_strength: f32,
     pub glow_iterations: usize,
@@ -75,22 +76,6 @@ impl EmulatorOptions {
     }
 }
 
-impl Default for EmulatorOptions {
-    fn default() -> Self {
-        Self {
-            palette: Palette::default(),
-            speed: 1.0,
-            volume: 1.0,
-            scale: 0,
-            display_glow_strength: 0.6,
-            background_glow_strength: 0.3,
-            glow_iterations: 5,
-            glow_radius: 0.5,
-            ambient_light: 0.3,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum UserEvent {
     InitRenderer(Box<Renderer>),
@@ -99,7 +84,26 @@ pub enum UserEvent {
     SetPaused(bool),
     UpdateInput(String, bool),
     UpdateOptions(EmulatorOptions),
+    SetCallbacks(ProxyCallbacks),
     Test(String),
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Default, Clone)]
+pub struct ProxyCallbacks {
+    pub(crate) rom_loaded: Option<js_sys::Function>,
+}
+
+#[wasm_bindgen]
+impl ProxyCallbacks {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set_rom_loaded(&mut self, callback: &js_sys::Function) {
+        self.rom_loaded = Some(callback.clone());
+    }
 }
 
 // A proxy to communicate with the event loop from frontend
@@ -137,5 +141,9 @@ impl Proxy {
 
     pub fn update_options(&self, options: &EmulatorOptions) {
         self.send(UserEvent::UpdateOptions(*options));
+    }
+
+    pub fn set_callbacks(&self, callbacks: &ProxyCallbacks) {
+        self.send(UserEvent::SetCallbacks(callbacks.clone()));
     }
 }

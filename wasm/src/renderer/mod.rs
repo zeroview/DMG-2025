@@ -463,8 +463,8 @@ impl Renderer {
     }
 
     pub fn update_options(&mut self, options: &EmulatorOptions) {
-        if self.scale_offset != options.scale {
-            self.scale_offset = options.scale;
+        if self.scale_offset != options.scale_offset {
+            self.scale_offset = options.scale_offset;
             self.resize(self.config.width, self.config.height);
         }
         self.options.palette = options.palette;
