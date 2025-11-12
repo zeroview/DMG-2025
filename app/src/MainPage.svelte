@@ -69,6 +69,18 @@
     valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
   />
 
+  <p>Fast forward speed:</p>
+  <MenuSlider
+    bind:value={
+      () => speedSliderValues.indexOf(options.fast_forward_speed),
+      (i) => (options.fast_forward_speed = speedSliderValues[i])
+    }
+    min={0}
+    max={speedSliderValues.length - 1}
+    step={1}
+    valueLabelCallback={(value) => `${speedSliderValues[value]}x`}
+  />
+
   <button class="danger-button" onclick={() => (options = defaultOptions)}
     >Reset options</button
   >

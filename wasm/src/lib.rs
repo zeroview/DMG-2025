@@ -223,6 +223,17 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::SetPaused(paused) => {
                 *self.audio.paused.write().unwrap() = paused;
             }
+            UserEvent::SetSpeed(speed) => {
+                // Update audio sample speed
+                if let Some(cpu) = &mut self.cpu {
+                    let new_sample_rate = if speed == 1.0 {
+                        self.audio.sample_rate
+                    } else {
+                        ((self.audio.sample_rate as f32) / speed) as u32
+                    };
+                    cpu.set_audio_sample_rate(new_sample_rate);
+                }
+            }
             UserEvent::UpdateInput(input_str, pressed) => {
                 let input_option = match input_str.as_str() {
                     "Right" => Some(InputFlag::RIGHT),
@@ -248,18 +259,8 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(renderer) = &mut self.renderer {
                     renderer.update_options(&options);
                 }
-                // Update audio sample speed
-                if let Some(cpu) = &mut self.cpu {
-                    let new_sample_rate = if options.speed == 1.0 {
-                        self.audio.sample_rate
-                    } else {
-                        ((self.audio.sample_rate as f32) / options.speed) as u32
-                    };
-                    cpu.set_audio_sample_rate(new_sample_rate);
-                }
                 // Update audio volume
                 *self.audio.volume.write().unwrap() = options.volume;
-
                 self.options = options;
             }
             UserEvent::SetCallbacks(callbacks) => {

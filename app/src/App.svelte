@@ -16,6 +16,7 @@
 
   let options = $state(loadOptions());
   $effect(() => {
+    manager.setSpeed(options.speed);
     manager.updateOptions(options);
     saveOptions(options);
   });
@@ -33,15 +34,24 @@
   input.onControlInput((input, pressed) => {
     manager.updateInput(input, pressed);
   });
-  input.onKeybindPressed((keybind) => {
-    console.log(keybind);
+  input.onKeybindPressed((keybind, pressed) => {
     switch (keybind) {
       case "Zoom in":
-        options.scaleOffset = Math.min(options.scaleOffset + 1, 5);
+        if (pressed) {
+          options.scaleOffset = Math.min(options.scaleOffset + 1, 5);
+        }
         break;
       case "Zoom out":
-        options.scaleOffset = Math.max(options.scaleOffset - 1, -5);
+        if (pressed) {
+          options.scaleOffset = Math.max(options.scaleOffset - 1, -5);
+        }
         break;
+      case "Fast forward":
+        if (pressed) {
+          manager.setSpeed(options.fast_forward_speed);
+        } else {
+          manager.setSpeed(options.speed);
+        }
     }
   });
 

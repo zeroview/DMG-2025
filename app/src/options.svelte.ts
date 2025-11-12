@@ -25,6 +25,7 @@ export const paletteNames = ["LCD", "Clear", "Raw"]
 export const defaultOptions = {
   paletteIndex: 0,
   speed: 1,
+  fast_forward_speed: 2,
   volume: 100,
   scaleOffset: 0,
   uiTransitions: true,

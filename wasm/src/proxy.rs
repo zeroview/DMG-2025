@@ -54,7 +54,6 @@ impl Default for Palette {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct EmulatorOptions {
     pub palette: Palette,
-    pub speed: f32,
     pub volume: f32,
     pub scale_offset: i32,
     pub display_glow_strength: f32,
@@ -82,6 +81,7 @@ pub enum UserEvent {
     LoadRom(Vec<u8>, bool),
     RunCPU(f32),
     SetPaused(bool),
+    SetSpeed(f32),
     UpdateInput(String, bool),
     UpdateOptions(EmulatorOptions),
     SetCallbacks(ProxyCallbacks),
@@ -133,6 +133,10 @@ impl Proxy {
 
     pub fn set_paused(&self, paused: bool) {
         self.send(UserEvent::SetPaused(paused));
+    }
+
+    pub fn set_speed(&self, speed: f32) {
+        self.send(UserEvent::SetSpeed(speed));
     }
 
     pub fn update_input(&self, key: String, pressed: bool) {

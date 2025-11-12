@@ -7,8 +7,8 @@ export default class EmulatorManager {
   private proxy: Proxy | undefined = undefined;
   private callbacks: ProxyCallbacks = new ProxyCallbacks();
   private lastFrameTime = 0;
-  private speed = 0;
 
+  private speed = 0;
   public initialized = false;
   public running = $state(false);
 
@@ -56,10 +56,14 @@ export default class EmulatorManager {
     window.requestAnimationFrame(this.runEmulator);
   }
 
+  setSpeed = (speed: number) => {
+    this.speed = speed;
+    this.proxy?.set_speed(speed);
+  }
+
   updateOptions = (options: Options) => {
     let emuOptions = new EmulatorOptions();
     emuOptions.update_palette(palettes[paletteNames[options.paletteIndex]])
-    emuOptions.speed = this.speed = options.speed;
     emuOptions.volume = options.volume / 100;
     emuOptions.scale_offset = options.scaleOffset;
     emuOptions.background_glow_strength = options.backgroundGlowStrength / 100;

@@ -1,6 +1,3 @@
-export type ControlName = "Left" | "Right" | "Up" | "Down" | "A" | "B" | "Select" | "Start";
-export type KeybindName = "Zoom in" | "Zoom out";
-
 const defaultControls = {
   "Left": "ArrowLeft",
   "Right": "ArrowRight",
@@ -10,19 +7,23 @@ const defaultControls = {
   "B": "z",
   "Select": "Backspace",
   "Start": "Enter"
-}
+};
 type Controls = typeof defaultControls;
+type ControlName = keyof Controls;
+
 const defaultKeybinds = {
   "Zoom in": "+",
-  "Zoom out": "-"
-}
+  "Zoom out": "-",
+  "Fast forward": "Shift"
+};
 type Keybinds = typeof defaultKeybinds;
+type KeybindName = keyof Keybinds;
 
 export default class InputManager {
   public mappingToRebind: string | undefined = $state(undefined);
   private pauseCallback: () => void = () => { };
   private controlCallback: (input: ControlName, pressed: boolean) => void = () => { };
-  private keybindCallback: (input: KeybindName) => void = () => { };
+  private keybindCallback: (input: KeybindName, pressed: boolean) => void = () => { };
 
   public controls: Controls = $state(defaultControls);
   public keybinds: Keybinds = $state(defaultKeybinds);
@@ -86,13 +87,11 @@ export default class InputManager {
         this.controlCallback(name, pressed);
       }
     });
-    if (pressed) {
-      keybindNames.forEach(name => {
-        if (this.keybinds[name] === key) {
-          this.keybindCallback(name);
-        }
-      });
-    }
+    keybindNames.forEach(name => {
+      if (this.keybinds[name] === key) {
+        this.keybindCallback(name, pressed);
+      }
+    });
   }
 
   onPause(callback: () => void) {
@@ -103,7 +102,7 @@ export default class InputManager {
     this.controlCallback = callback;
   }
 
-  onKeybindPressed(callback: (keybind: KeybindName) => void) {
+  onKeybindPressed(callback: (keybind: KeybindName, pressed: boolean) => void) {
     this.keybindCallback = callback;
   }
 
