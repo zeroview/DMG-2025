@@ -1,4 +1,6 @@
 use dmg_2025_core::*;
+use hash32::{Hasher as _, Murmur3Hasher};
+use std::hash::Hash;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -42,6 +44,7 @@ pub struct App {
     audio: AudioHandler,
     input_state: InputFlag,
     cpu: Option<CPU>,
+    rom: Vec<u8>,
     last_cpu_frame: u8,
 }
 
@@ -55,6 +58,7 @@ impl App {
             audio: AudioHandler::new(),
             input_state: InputFlag::from_bits_truncate(0xFF),
             cpu: None,
+            rom: vec![],
             last_cpu_frame: 0,
         }
     }
@@ -178,15 +182,16 @@ impl ApplicationHandler<UserEvent> for App {
                 };
 
                 if let Some(rom) = rom {
-                    match CPU::new(rom) {
+                    // Hash ROM into a number that can be used to index database
+                    let mut hasher = Murmur3Hasher::default();
+                    rom.hash(&mut hasher);
+                    let hash = hasher.finish32();
+                    match CPU::new(rom.clone()) {
                         Ok(mut cpu) => {
-                            self.callbacks.rom_loaded.as_ref().inspect(|callback| {
-                                let _ = callback.call2(
-                                    &JsValue::null(),
-                                    &true.into(),
-                                    &cpu.get_cartridge_title().into(),
-                                );
-                            });
+                            self.callbacks.call(Callback::ROMLoaded(
+                                cpu.get_cartridge_title().to_string(),
+                                hash,
+                            ));
                             // Initialize audio playback
                             cpu.set_audio_sample_rate(self.audio.sample_rate);
                             let audio_consumer = cpu
@@ -196,23 +201,14 @@ impl ApplicationHandler<UserEvent> for App {
                             self.renderer.as_ref().unwrap().window.request_redraw();
                         }
                         Err(e) => {
-                            self.callbacks.rom_loaded.as_ref().inspect(|callback| {
-                                let _ = callback.call2(
-                                    &JsValue::null(),
-                                    &false.into(),
-                                    &e.to_string().into(),
-                                );
-                            });
+                            self.callbacks
+                                .call(Callback::Error(format!("Failed to load ROM: {e}")));
                         }
                     }
+                    self.rom = rom;
                 } else {
-                    self.callbacks.rom_loaded.as_ref().inspect(|callback| {
-                        let _ = callback.call2(
-                            &JsValue::null(),
-                            &false.into(),
-                            &"Zip archive is invalid".into(),
-                        );
-                    });
+                    self.callbacks
+                        .call(Callback::Error("Zip archive is invalid".to_string()));
                 }
             }
             UserEvent::RunCPU(millis) => {
@@ -220,6 +216,34 @@ impl ApplicationHandler<UserEvent> for App {
                     cpu.run(millis);
                 }
             }
+            UserEvent::SerializeCPU => {
+                if let Some(cpu) = &self.cpu {
+                    match postcard::to_stdvec(&cpu) {
+                        Ok(serialized) => {
+                            self.callbacks.call(Callback::CPUSerialized(serialized));
+                        }
+                        Err(e) => {
+                            self.callbacks
+                                .call(Callback::Error(format!("Failed to serialize: {e}")));
+                        }
+                    };
+                }
+            }
+            UserEvent::DeserializeCPU(cpu) => match postcard::from_bytes::<CPU>(&cpu) {
+                Ok(mut deserialized) => {
+                    deserialized.set_rom(self.rom.clone());
+                    deserialized.set_audio_sample_rate(self.audio.sample_rate);
+                    let audio_consumer = deserialized
+                        .init_audio_buffer(self.audio.sample_capacity, self.audio.channels);
+                    self.audio.init_playback(audio_consumer);
+                    self.cpu = Some(deserialized);
+                    self.callbacks.call(Callback::CPUDeserialized);
+                }
+                Err(e) => {
+                    self.callbacks
+                        .call(Callback::Error(format!("Failed to deserialize: {e}")));
+                }
+            },
             UserEvent::SetPaused(paused) => {
                 *self.audio.paused.write().unwrap() = paused;
             }

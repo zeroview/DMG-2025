@@ -39,6 +39,11 @@ impl CPU {
         })
     }
 
+    /// Writes ROM file onto memory: used to rewrite ROM after deserialization
+    pub fn set_rom(&mut self, rom_file: Vec<u8>) {
+        self.mem.mbc.load_rom(rom_file);
+    }
+
     /// Initializes a ring buffer for audio playback and returns its consumer.
     /// Remember to set sample rate using set_audio_sample_rate
     pub fn init_audio_buffer(

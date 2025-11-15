@@ -32,6 +32,7 @@
     }
   },
   "dependencies": {
+    "dexie": "^4.2.1",
     "DMG-2025": "file:wasm/pkg",
     "fuse.js": "^7.1.0"
   }

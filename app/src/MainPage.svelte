@@ -7,10 +7,22 @@
     manager,
     options = $bindable(),
     onBrowse,
+    onSave,
+    onLoad,
+    onSaveSlotChange,
+    saveDisabled,
+    loadDisabled,
+    saveSlot,
   }: {
     manager: EmulatorManager;
     options: Options;
     onBrowse: () => void;
+    onSave: () => void;
+    onLoad: () => void;
+    onSaveSlotChange: (change: number) => void;
+    saveDisabled: boolean;
+    loadDisabled: boolean;
+    saveSlot: number;
   } = $props();
 
   const zipMimeTypes = [
@@ -46,8 +58,19 @@
   </button>
   <button onclick={() => onBrowse()}>Browse Homebrew Hub</button>
 </div>
-<p style="height: 50px"></p>
 
+<p style="height:1rem"></p>
+<div class="button-row">
+  <button onclick={onSave} disabled={saveDisabled}>Save state</button>
+  <button onclick={onLoad} disabled={loadDisabled}>Load state</button>
+  <div class="button-row" style="gap:1rem">
+    <p>Slot:</p>
+    <button onclick={() => onSaveSlotChange(-1)}>&lt;</button>
+    <p style="width:2rem; text-align: center">{saveSlot}</p>
+    <button onclick={() => onSaveSlotChange(1)}>&gt;</button>
+  </div>
+</div>
+<p style="height:1.5rem"></p>
 <div class="menu-grid">
   <p>Volume:</p>
   <MenuSlider

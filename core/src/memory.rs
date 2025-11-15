@@ -98,11 +98,7 @@ impl std::fmt::Display for MemoryInitializationError {
                 write!(f, "ROM doesn't contain header")
             }
             MemoryInitializationErrorType::UnimplementedMBC(mbc) => {
-                write!(
-                    f,
-                    "MBC type {:?} isn't yet implemented in this emulator. Sorry!",
-                    mbc
-                )
+                write!(f, "MBC type {:?} isn't yet implemented. Sorry!", mbc)
             }
         }
     }
@@ -225,6 +221,42 @@ impl MBC {
         }
     }
 
+    fn read_rom(&self, address: usize) -> u8 {
+        if self.rom.len() <= address {
+            log::error!(
+                "Tried to read ROM at {:#06X}, but vec length is only {:#06X}",
+                address,
+                self.rom.len()
+            );
+            return 0;
+        }
+        self.rom[address]
+    }
+
+    fn read_ram(&self, address: usize) -> u8 {
+        if self.ram.len() <= address {
+            log::error!(
+                "Tried to read RAM at {:#06X}, but vec length is only {:#06X}",
+                address,
+                self.ram.len()
+            );
+            return 0;
+        }
+        self.ram[address]
+    }
+
+    fn write_ram(&mut self, address: usize, value: u8) {
+        if self.ram.len() <= address {
+            log::error!(
+                "Tried to write to RAM at {:#06X}, but vec length is only {:#06X}",
+                address,
+                self.ram.len()
+            );
+            return;
+        }
+        self.ram[address] = value;
+    }
+
     /// Used to mask bank number register value to wrap around
     /// based on maximum number of banks
     fn mask_bank_number(&self, number: u8, bank_amount: u16) -> usize {
@@ -242,15 +274,15 @@ impl MBC {
 
     fn read_nombc(&self, address: u16) -> u8 {
         match address {
-            0x0000..=0x7FFF => self.rom[address as usize],
-            0xA000..=0xBFFF => self.ram[(address - 0xA000) as usize],
+            0x0000..=0x7FFF => self.read_rom(address as usize),
+            0xA000..=0xBFFF => self.read_ram(address as usize),
             _ => 0xFF,
         }
     }
 
     fn write_nombc(&mut self, address: u16, value: u8) {
-        if !self.ram.is_empty() && address >= 0xA000 {
-            self.ram[(address - 0xA000) as usize] = value;
+        if matches!(address, 0xA000..=0xBFFF) {
+            self.write_ram(address as usize, value);
         }
     }
 
@@ -277,16 +309,7 @@ impl MBC {
                         };
                     address += 0x20 * high_address * 0x4000
                 }
-
-                if self.rom.len() <= address {
-                    log::error!(
-                        "Tried to access ROM at {:#06X}, but length is only {:#06X}",
-                        address,
-                        self.rom.len()
-                    );
-                    return 0;
-                }
-                self.rom[address]
+                self.read_rom(address)
             }
             0xA000..=0xBFFF => {
                 // Reads to disabled RAM usually return 0xFF
@@ -299,16 +322,7 @@ impl MBC {
                     address +=
                         self.mask_bank_number(self.ram_bank as u8, self.info.ram_banks) * 0x2000;
                 }
-
-                if self.ram.len() <= address {
-                    log::error!(
-                        "Tried to access RAM at {:#06X}, but RAM size is only {:#06X}",
-                        address,
-                        self.ram.len()
-                    );
-                    return 0;
-                }
-                self.ram[address]
+                self.read_ram(address)
             }
             _ => 0xFF,
         }
@@ -348,17 +362,7 @@ impl MBC {
                 if self.advanced_banking && self.info.ram_banks > 1 {
                     address += self.ram_bank * 0x2000;
                 }
-
-                if self.ram.len() <= address {
-                    log::error!(
-                        "Tried to write {:#04X} into RAM at {:#06X}, but RAM size is only {:#06X}",
-                        value,
-                        address,
-                        self.ram.len()
-                    );
-                    return;
-                }
-                self.ram[address] = value;
+                self.write_ram(address, value);
             }
             _ => {}
         };
@@ -370,16 +374,7 @@ impl MBC {
             0x0000..=0x3FFF => self.rom[address],
             0x4000..=0x7FFF => {
                 address += 0x4000 * (self.rom_bank - 1);
-
-                if self.rom.len() <= address {
-                    log::error!(
-                        "Tried to access ROM at {:#06X}, but length is only {:#06X}",
-                        address,
-                        self.rom.len()
-                    );
-                    return 0;
-                }
-                self.rom[address]
+                self.read_rom(address)
             }
             0xA000..=0xBFFF => {
                 if !self.ram_enabled {
@@ -387,16 +382,7 @@ impl MBC {
                 }
                 address -= 0xA000;
                 address += self.ram_bank * 0x2000;
-
-                if self.ram.len() <= address {
-                    log::error!(
-                        "Tried to access RAM at {:#06X}, but RAM size is only {:#06X}",
-                        address,
-                        self.ram.len()
-                    );
-                    return 0xFF;
-                }
-                self.ram[address]
+                self.read_ram(address)
             }
             _ => 0xFF,
         }
@@ -428,17 +414,7 @@ impl MBC {
                 let mut address = address as usize;
                 address -= 0xA000;
                 address += self.ram_bank * 0x2000;
-
-                if self.ram.len() <= address {
-                    log::error!(
-                        "Tried to write {:#04X} into RAM at {:#06X}, but RAM size is only {:#06X}",
-                        value,
-                        address,
-                        self.ram.len()
-                    );
-                    return;
-                }
-                self.ram[address] = value;
+                self.write_ram(address, value);
             }
             _ => {}
         };
@@ -450,16 +426,7 @@ impl MBC {
             0x0000..=0x3FFF => self.rom[address],
             0x4000..=0x7FFF => {
                 address = address.saturating_add_signed(0x4000 * ((self.rom_bank as isize) - 1));
-
-                if self.rom.len() <= address {
-                    log::error!(
-                        "Tried to access ROM at {:#06X}, but length is only {:#06X}",
-                        address,
-                        self.rom.len()
-                    );
-                    return 0;
-                }
-                self.rom[address]
+                self.read_rom(address)
             }
             0xA000..=0xBFFF => {
                 if !self.ram_enabled {
@@ -467,16 +434,7 @@ impl MBC {
                 }
                 address -= 0xA000;
                 address += self.ram_bank * 0x2000;
-
-                if self.ram.len() <= address {
-                    log::error!(
-                        "Tried to access RAM at {:#06X}, but RAM size is only {:#06X}",
-                        address,
-                        self.ram.len()
-                    );
-                    return 0xFF;
-                }
-                self.ram[address]
+                self.read_ram(address)
             }
             _ => 0xFF,
         }
@@ -507,17 +465,7 @@ impl MBC {
                 let mut address = address as usize;
                 address -= 0xA000;
                 address += self.ram_bank * 0x2000;
-
-                if self.ram.len() <= address {
-                    log::error!(
-                        "Tried to write {:#04X} into RAM at {:#06X}, but RAM size is only {:#06X}",
-                        value,
-                        address,
-                        self.ram.len()
-                    );
-                    return;
-                }
-                self.ram[address] = value;
+                self.write_ram(address, value);
             }
             _ => {}
         };

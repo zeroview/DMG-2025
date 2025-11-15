@@ -16,7 +16,10 @@
   {/each}
 {/snippet}
 
-<div class="menu-grid" style="grid-template-columns: 15rem 15rem">
+<div
+  class="menu-grid"
+  style="grid-template-columns: 15rem 15rem; overflow-y: scroll;"
+>
   <h3>Controls</h3>
   {@render inputList(input.controls)}
   <h3>Keybinds</h3>

@@ -14,7 +14,19 @@ type ControlName = keyof Controls;
 const defaultKeybinds = {
   "Zoom in": "+",
   "Zoom out": "-",
-  "Fast forward": "Shift"
+  "Fast forward": "Shift",
+  "Save state": "s",
+  "Load state": "l",
+  "Save slot 1": "1",
+  "Save slot 2": "2",
+  "Save slot 3": "3",
+  "Save slot 4": "4",
+  "Save slot 5": "5",
+  "Save slot 6": "6",
+  "Save slot 7": "7",
+  "Save slot 8": "8",
+  "Save slot 9": "9",
+  "Save slot 10": "0",
 };
 type Keybinds = typeof defaultKeybinds;
 type KeybindName = keyof Keybinds;

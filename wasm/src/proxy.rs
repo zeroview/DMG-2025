@@ -1,5 +1,7 @@
 use super::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::mem::{Discriminant, discriminant};
 use web_sys::js_sys;
 
 /// A color in linear RGB space
@@ -75,23 +77,24 @@ impl EmulatorOptions {
     }
 }
 
-#[derive(Debug)]
-pub enum UserEvent {
-    InitRenderer(Box<Renderer>),
-    LoadRom(Vec<u8>, bool),
-    RunCPU(f32),
-    SetPaused(bool),
-    SetSpeed(f32),
-    UpdateInput(String, bool),
-    UpdateOptions(EmulatorOptions),
-    SetCallbacks(ProxyCallbacks),
-    Test(String),
+pub enum Callback {
+    /// Called when new ROM is loaded
+    /// Arguments: ROM title (from header), hash of ROM file
+    ROMLoaded(String, u32),
+    /// Called when CPU is successfully serialized into a save state
+    /// Arguments: the serialized CPU in binary
+    CPUSerialized(Vec<u8>),
+    /// Called when CPU is successfully deserialized, a.k.a. save state is loaded
+    CPUDeserialized,
+    /// Called when something goes wrong
+    /// Arguments: information about error
+    Error(String),
 }
 
 #[wasm_bindgen]
 #[derive(Debug, Default, Clone)]
 pub struct ProxyCallbacks {
-    pub(crate) rom_loaded: Option<js_sys::Function>,
+    callbacks: HashMap<Discriminant<Callback>, js_sys::Function>,
 }
 
 #[wasm_bindgen]
@@ -101,9 +104,57 @@ impl ProxyCallbacks {
         Self::default()
     }
 
-    pub fn set_rom_loaded(&mut self, callback: &js_sys::Function) {
-        self.rom_loaded = Some(callback.clone());
+    fn set_callback(&mut self, callback_type: Callback, function: &js_sys::Function) {
+        self.callbacks
+            .insert(discriminant(&callback_type), function.clone());
     }
+
+    pub fn set_rom_loaded(&mut self, function: &js_sys::Function) {
+        self.set_callback(Callback::ROMLoaded(String::new(), 0), function);
+    }
+
+    pub fn set_cpu_serialized(&mut self, function: &js_sys::Function) {
+        self.set_callback(Callback::CPUSerialized(Vec::new()), function);
+    }
+
+    pub fn set_cpu_deserialized(&mut self, function: &js_sys::Function) {
+        self.set_callback(Callback::CPUDeserialized, function);
+    }
+
+    pub fn set_error(&mut self, function: &js_sys::Function) {
+        self.set_callback(Callback::Error(String::new()), function);
+    }
+
+    pub(crate) fn call(&self, callback: Callback) {
+        if let Some(function) = self.callbacks.get(&discriminant(&callback)) {
+            match callback {
+                Callback::ROMLoaded(title, hash) => {
+                    function.call2(&JsValue::NULL, &title.into(), &hash.into())
+                }
+                Callback::CPUSerialized(buffer) => {
+                    function.call1(&JsValue::NULL, &js_sys::Uint8Array::new_from_slice(&buffer))
+                }
+                Callback::CPUDeserialized => function.call0(&JsValue::NULL),
+                Callback::Error(error) => function.call1(&JsValue::NULL, &error.into()),
+            }
+            .unwrap_throw();
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum UserEvent {
+    InitRenderer(Box<Renderer>),
+    LoadRom(Vec<u8>, bool),
+    RunCPU(f32),
+    SerializeCPU,
+    DeserializeCPU(Vec<u8>),
+    SetPaused(bool),
+    SetSpeed(f32),
+    UpdateInput(String, bool),
+    UpdateOptions(EmulatorOptions),
+    SetCallbacks(ProxyCallbacks),
+    Test(String),
 }
 
 // A proxy to communicate with the event loop from frontend
@@ -129,6 +180,14 @@ impl Proxy {
 
     pub fn run_cpu(&self, millis: f32) {
         self.send(UserEvent::RunCPU(millis));
+    }
+
+    pub fn serialize_cpu(&self) {
+        self.send(UserEvent::SerializeCPU);
+    }
+
+    pub fn deserialize_cpu(&self, cpu: Vec<u8>) {
+        self.send(UserEvent::DeserializeCPU(cpu));
     }
 
     pub fn set_paused(&self, paused: bool) {

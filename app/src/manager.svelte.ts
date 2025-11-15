@@ -1,4 +1,3 @@
-
 import { spawn_event_loop, Proxy, EmulatorOptions, ProxyCallbacks, } from "DMG-2025";
 import type { Options } from "./options.svelte";
 import { palettes, paletteNames } from "./options.svelte";
@@ -23,7 +22,6 @@ export default class EmulatorManager {
     if (!this.initialized) {
       throw new ReferenceError("Emulator is not initialized");
     }
-
     this.proxy?.load_rom(new Uint8Array(rom), isZip);
   }
 
@@ -56,6 +54,14 @@ export default class EmulatorManager {
     window.requestAnimationFrame(this.runEmulator);
   }
 
+  serializeCPU = () => {
+    this.proxy?.serialize_cpu();
+  }
+
+  deserializeCPU = (buffer: Uint8Array) => {
+    this.proxy?.deserialize_cpu(buffer);
+  }
+
   setSpeed = (speed: number) => {
     this.speed = speed;
     this.proxy?.set_speed(speed);
@@ -78,8 +84,19 @@ export default class EmulatorManager {
     this.proxy?.update_input(key, pressed);
   }
 
-  onRomLoaded = (callback: (success: boolean, info: string) => void) => {
+  onRomLoaded = (callback: (title: string, hash: number) => void) => {
     this.callbacks.set_rom_loaded(callback);
-    this.proxy?.set_callbacks(this.callbacks);
+  }
+
+  onCPUSerialization = (callback: (result: Uint8Array) => void) => {
+    this.callbacks.set_cpu_serialized(callback);
+  }
+
+  onCPUDeserialization = (callback: () => void) => {
+    this.callbacks.set_cpu_deserialized(callback);
+  }
+
+  onError = (callback: (error: string) => void) => {
+    this.callbacks.set_error(callback);
   }
 }

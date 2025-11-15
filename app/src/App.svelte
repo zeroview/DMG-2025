@@ -6,13 +6,41 @@
 
   import InputManager from "./input.svelte";
   import EmulatorManager from "./manager.svelte";
+  import Database from "./db.svelte";
 
   import { fade, fly } from "svelte/transition";
   import { loadOptions, saveOptions } from "./options.svelte";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
 
+  let db = new Database();
   let manager = new EmulatorManager();
+  let romHash = 0;
+
   let hasRomBeenLoaded = false;
+  let saveDisabled = $state(true);
+  let loadDisabled = $state(true);
+  let saveSlot = $state(1);
+  const changeSaveSlot = async (change: number) => {
+    saveSlot += change;
+    if (saveSlot > 10) {
+      saveSlot = 1;
+    } else if (saveSlot < 1) {
+      saveSlot = 10;
+    }
+    if (hasRomBeenLoaded) {
+      loadDisabled = (await db.getState(romHash, saveSlot)) === null;
+    }
+    showPopupMessage(`Selected slot ${saveSlot}`);
+  };
+  const saveState = () => {
+    manager.serializeCPU();
+  };
+  const loadState = async () => {
+    let state = await db.getState(romHash, saveSlot);
+    if (state) {
+      manager.deserializeCPU(state);
+    }
+  };
 
   let options = $state(loadOptions());
   $effect(() => {
@@ -35,6 +63,11 @@
     manager.updateInput(input, pressed);
   });
   input.onKeybindPressed((keybind, pressed) => {
+    if (keybind.slice(0, 9) === "Save slot") {
+      let slot = parseInt(keybind.slice(10));
+      saveSlot = slot;
+      showPopupMessage(`Selected slot ${saveSlot}`);
+    }
     switch (keybind) {
       case "Zoom in":
         if (pressed) {
@@ -52,6 +85,17 @@
         } else {
           manager.setSpeed(options.speed);
         }
+        break;
+      case "Save state":
+        if (pressed) {
+          saveState();
+        }
+        break;
+      case "Load state":
+        if (pressed) {
+          loadState();
+        }
+        break;
     }
   });
 
@@ -70,31 +114,48 @@
 
   let popupVisible = $state(false);
   let popupText = $state("");
-  function showMessage(msg: string) {
+  function showPopupMessage(msg: string) {
     popupText = msg;
+    popupVisible = false;
+    tick();
     popupVisible = true;
     setTimeout(() => {
       popupVisible = false;
-    }, 2000);
+    }, 400);
   }
 
-  manager.onRomLoaded((success, info) => {
-    if (success) {
-      document.title = `${info} - DMG-2025`;
-      console.info("Successfully loaded ROM");
-      if (!hasRomBeenLoaded) {
-        showMessage("Press Esc to return to menu");
-        hasRomBeenLoaded = true;
-      }
-      manager.toggle_execution();
-    } else {
-      let msg = `Failed to load ROM: ${info}`;
-      console.error(msg);
-      showMessage(msg);
+  manager.onRomLoaded(async (title, hash) => {
+    romHash = hash;
+    saveSlot = 1;
+    saveDisabled = false;
+    loadDisabled = (await db.getState(romHash, saveSlot)) === null;
+    document.title = `${title} - DMG-2025`;
+    console.info(`Loaded ROM "${title}" with hash ${hash}`);
+    if (!hasRomBeenLoaded) {
+      showPopupMessage("Press Esc to return to menu");
+      hasRomBeenLoaded = true;
     }
+    manager.toggle_execution();
+  });
+  manager.onCPUSerialization((result) => {
+    db.saveState(romHash, saveSlot, result);
+    loadDisabled = false;
+    console.info(`Serialized state with length of ${result.length}`);
+    showPopupMessage(`Saved state to slot ${saveSlot}`);
+  });
+  manager.onCPUDeserialization(() => {
+    console.info(`Deserialized state`);
+    if (!manager.running) {
+      manager.toggle_execution();
+    }
+    showPopupMessage(`Loaded state from slot ${saveSlot}`);
+  });
+  manager.onError((error) => {
+    console.error(error);
+    showPopupMessage(error);
   });
 
-  onMount(async () => manager.initialize(options));
+  onMount(() => manager.initialize(options));
 </script>
 
 <svelte:window
@@ -106,7 +167,7 @@
   {#if popupVisible}
     <p
       class="popup"
-      in:fly={{ y: 200, duration: 600 }}
+      in:fly={{ y: 200, duration: 400 }}
       out:fade={{ duration: 2000 }}
     >
       {popupText}
@@ -138,7 +199,17 @@
         </div>
       {:else}
         <div class="menu-container" in:fly={getTransition()}>
-          <MainPage {manager} bind:options onBrowse={() => (currentPage = 1)} />
+          <MainPage
+            {manager}
+            bind:options
+            onBrowse={() => (currentPage = 1)}
+            onSave={saveState}
+            onLoad={loadState}
+            onSaveSlotChange={changeSaveSlot}
+            {saveDisabled}
+            {loadDisabled}
+            {saveSlot}
+          />
         </div>
       {/if}
     </div>
