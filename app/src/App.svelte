@@ -40,12 +40,12 @@
   const showErrorPopup = (error: string) => {
     console.error(error);
     popupColor = errorColor;
-    showPopup(error, 2000);
+    showPopup(error, 3000);
   };
   /// Shows a popup for an info message
   const showInfoPopup = (msg: string) => {
     popupColor = infoColor;
-    showPopup(msg, 500);
+    showPopup(msg, 2000);
   };
 
   /// If ROM has been loaded in this session
@@ -133,7 +133,10 @@
     document.title = `${info.title} - DMG-2025`;
     console.info(`Loaded ROM "${info.title}" with hash ${info.hash}`);
     if (!hasRomBeenLoaded) {
-      showInfoPopup("Press Esc to return to menu");
+      showPopup(
+        "Press Esc to return to menu\nCheck Input page for controls",
+        6000,
+      );
       hasRomBeenLoaded = true;
     }
     // Start emulation
