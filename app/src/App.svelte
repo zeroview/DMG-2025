@@ -208,6 +208,15 @@
     (document.activeElement as HTMLElement)?.blur?.();
   });
 
+  let filters = $state({
+    search: "",
+    featured: true,
+    games: false,
+    demos: false,
+    tools: false,
+    music: false,
+  });
+
   // Constants for transitions
   let transitionDuration = 300;
   let transitionLength = 200;
@@ -284,6 +293,7 @@
       {#if currentPage == 1}
         <div class="menu-container" in:fly={getTransition()}>
           <BrowserPage
+            bind:filters
             onLoadRom={loadROM}
             onKeyboardFocus={(focus) => (input.keyboardFocused = focus)}
           />

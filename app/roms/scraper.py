@@ -10,7 +10,7 @@ import json
 # Load GITHUB_TOKEN from .env
 config = dotenv_values(".env");
 headers = {
-    "Authorization": f"Bearer {config["GITHUB_TOKEN"]}",
+    "Authorization": f"Bearer {config['GITHUB_TOKEN']}",
 }
 
 get_count = 0
@@ -92,6 +92,6 @@ for entry in entries:
 filename = "homebrewhub.json"
 # Save list to JSON file
 with open(filename, 'w', encoding='utf-8') as f:
-    json.dump(roms, f, indent=2, ensure_ascii=False)
+    json.dump(roms, f, indent=2, ensure_ascii=False, sort_keys=True)
 
 print(f"Saved {len(roms)} ROMs to {filename}, used {get_count} API requests (out of 5000 per hour)")

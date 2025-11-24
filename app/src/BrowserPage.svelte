@@ -2,47 +2,71 @@
   import Fuse from "fuse.js";
   import MenuCheckbox from "./MenuCheckbox.svelte";
   import homebrewRoms from "../roms/homebrewhub.json";
-  let {
-    onLoadRom,
-    onKeyboardFocus,
-  }: {
-    onLoadRom: (rom: ArrayBuffer, isZip: boolean) => void;
-    onKeyboardFocus: (focus: boolean) => void;
-  } = $props();
-  interface ROMInfo {
+  import featuredTitles from "../roms/featured.json";
+
+  /// Info about a ROM in the browser
+  interface BrowserROMInfo {
     developer: string;
     typetag: string;
     download_url: string;
     image_url: string;
   }
-  const roms = homebrewRoms as unknown as Record<string, ROMInfo>;
-  let searchString = $state("");
-  let games = $state(false);
-  let demos = $state(false);
-  let tools = $state(false);
-  let music = $state(false);
+
+  interface BrowserFilters {
+    search: string;
+    featured: boolean;
+    games: boolean;
+    demos: boolean;
+    tools: boolean;
+    music: boolean;
+  }
+
+  let {
+    filters = $bindable(),
+    onLoadRom,
+    onKeyboardFocus,
+  }: {
+    filters: BrowserFilters;
+    onLoadRom: (rom: ArrayBuffer, isZip: boolean) => void;
+    onKeyboardFocus: (focus: boolean) => void;
+  } = $props();
+  const roms = homebrewRoms as unknown as Record<string, BrowserROMInfo>;
+
   let romTitles = $derived.by(() => {
+    // Filter ROM list based on checkboxes
     const filtered = Object.keys(roms).filter((title) => {
       // Dont filter if filters arent enabled
-      if (!(games || demos || tools || music)) {
+      if (
+        !(
+          filters.featured ||
+          filters.games ||
+          filters.demos ||
+          filters.tools ||
+          filters.music
+        )
+      ) {
         return true;
       }
-
+      /// Filter featured games
+      if (filters.featured) {
+        return featuredTitles.includes(title);
+      }
       let typetag = roms[title].typetag;
-      // Filter out not enabled ROM types
+      // Filter out not enabled ROM types based on typetag string
       return (
-        !(!games && typetag == "game") &&
-        !(!demos && typetag == "demo") &&
-        !(!tools && typetag == "tool") &&
-        !(!music && typetag == "music")
+        !(!filters.games && typetag == "game") &&
+        !(!filters.demos && typetag == "demo") &&
+        !(!filters.tools && typetag == "tool") &&
+        !(!filters.music && typetag == "music")
       );
     });
-    if (!searchString) {
+    /// Search ROM titles with Fuse
+    if (!filters.search) {
       return filtered;
     } else {
       const fuse = new Fuse(filtered);
       return fuse
-        .search(searchString)
+        .search(filters.search)
         .sort((a, b) => (a.score ?? 0) - (b.score ?? 0))
         .map((result) => result.item);
     }
@@ -60,18 +84,23 @@
 <div class="browser-container">
   <div class="browser-topbar">
     <div class="browser-filters">
-      <p>Filters:</p>
-      <MenuCheckbox bind:value={games} />
+      <MenuCheckbox
+        --main-color="#d1c554"
+        --active-color="#ffe500"
+        bind:value={filters.featured}
+      />
+      <p style="color: #d1c554;">Featured</p>
+      <MenuCheckbox bind:value={filters.games} />
       <p>Games</p>
-      <MenuCheckbox bind:value={demos} />
+      <MenuCheckbox bind:value={filters.demos} />
       <p>Demos</p>
-      <MenuCheckbox bind:value={tools} />
+      <MenuCheckbox bind:value={filters.tools} />
       <p>Tools</p>
-      <MenuCheckbox bind:value={music} />
+      <MenuCheckbox bind:value={filters.music} />
       <p>Music</p>
     </div>
     <input
-      bind:value={searchString}
+      bind:value={filters.search}
       placeholder="Search"
       onfocusin={() => onKeyboardFocus(true)}
       onfocusout={() => onKeyboardFocus(false)}
