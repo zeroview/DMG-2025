@@ -3,6 +3,12 @@
   src: local("GBBoot"), url("../assets/gbboot.woff2")
 }
 
+:root {
+  --main-color: #c0c0c0;
+  --active-color: #ffffff;
+  --disabled-color: grey;
+}
+
 /* Disable animations based on accessibility settings */
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -16,6 +22,10 @@
 * {
   padding: 0;
   margin: 0;
+}
+
+*:focus {
+  outline: none;
 }
 
 html,
@@ -51,8 +61,13 @@ main {
   align-items: flex-start;
 }
 
-.menu-sidebar>* {
+.menu-sidebar * {
   font-weight: bold;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  -webkit-text-decoration-color: transparent;
+  -moz-text-decoration-color: transparent;
+  transition: 0.2s ease;
 }
 
 .menu-container {
@@ -83,16 +98,16 @@ main {
   display: grid;
   grid-template-columns: 1fr 1fr;
   scrollbar-width: auto;
-  scrollbar-color: #d1d1d1 transparent;
+  scrollbar-color: var(--main-color) transparent;
   overflow-y: scroll;
   grid-column: span 2;
 }
 
-.menu-grid>button {
+.menu-grid button {
   text-align: left;
 }
 
-.menu-grid>h3 {
+.menu-grid h3 {
   text-align: center;
   margin-top: 20px;
   grid-column: span 2;
@@ -109,14 +124,36 @@ main {
   width: 100%;
 }
 
-.browser-topbar>input {
-  margin-top: 0.25rem;
-  margin-bottom: 0.25rem;
-  background-color: grey;
-  color: white;
+.browser-topbar input {
+  background-color: transparent;
+  border: 3px solid var(--main-color);
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
+  color: var(--active-color);
   font-size: 2rem;
-
+  margin-bottom: 0.4rem;
   font-family: GBBoot, monospace;
+  transition: border 0.2s ease, color 0.2s ease;
+}
+
+.browser-topbar input:hover {
+  border: 3px solid var(--active-color);
+}
+
+.browser-topbar input:focus {
+  border: 3px solid var(--active-color);
+}
+
+.browser-topbar input::placeholder {
+  color: var(--main-color);
+}
+
+.browser-topbar input::-moz-placeholder {
+  color: var(--main-color);
+}
+
+.browser-topbar input::-webkit-input-placeholder {
+  color: var(--main-color);
 }
 
 .browser-filters {
@@ -129,15 +166,20 @@ main {
   aspect-ratio: 1 / 1;
 }
 
-.browser-item img {
+.browser-item h3 {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  font-size: 0;
-  display: block;
+  text-align: center;
+  word-wrap: break-word;
+  font-size: 2rem;
 }
 
-.browser-img {
+.browser-item p {
+  color: var(--disabled-color);
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.browser-button {
   display: block;
   position: relative;
   width: 100%;
@@ -146,7 +188,15 @@ main {
   background-size: cover;
 }
 
-.browser-img-overlay {
+.browser-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  font-size: 0;
+  display: block;
+}
+
+.browser-button div {
   position: absolute;
   top: 0;
   left: 0;
@@ -157,38 +207,29 @@ main {
   background-color: rgba(0, 0, 0, 0.6);
 }
 
-.browser-img-overlay-text {
+.browser-button p {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   -ms-transform: translate(-50%, -50%);
   font-size: 60px !important;
-  color: white !important;
+  color: var(--active-color) !important;
 }
 
-.browser-img-overlay:hover {
+.browser-button:hover div {
   opacity: 1;
 }
 
-.browser-item h3 {
-  width: 100%;
-  text-align: center;
-  word-wrap: break-word;
-  font-size: 2rem;
-}
-
-.browser-item p {
-  color: gray;
-  font-size: 1.5rem;
-  text-align: center;
+.browser-button:focus div {
+  opacity: 1;
 }
 
 .browser-list {
   width: 100%;
   overflow-y: scroll;
   scrollbar-width: auto;
-  scrollbar-color: #d1d1d1 transparent;
+  scrollbar-color: var(--main-color) transparent;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 2%;
@@ -211,13 +252,13 @@ main {
   z-index: 1;
   bottom: 1rem;
   left: 2rem;
-  color: white;
+  color: var(--active-color);
   text-shadow: 2px 2px #000;
 }
 
 p,
 h3 {
-  color: #d1d1d1;
+  color: var(--main-color);
   font-size: 2rem;
   font-family: GBBoot, monospace;
   font-smooth: never;
@@ -230,12 +271,13 @@ h3 {
   -ms-user-select: none;
 }
 
+
 br {
   height: 3rem;
 }
 
 button {
-  color: #d1d1d1;
+  color: var(--main-color);
   font-size: 2rem;
   font-family: GBBoot, monospace;
   font-smooth: never;
@@ -248,12 +290,38 @@ button {
 }
 
 button:hover {
-  color: #ffffff;
+  color: var(--active-color);
+}
+
+button:focus {
+  color: var(--active-color);
 }
 
 button:disabled {
-  color: grey;
+  color: var(--disabled-color);
   cursor: inherit;
+}
+
+.img-button {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.img-button:hover * {
+  color: var(--active-color);
+  fill: var(--active-color);
+}
+
+.img-button * {
+  fill: var(--main-color);
+  transition: fill 0.2s ease, color 0.2s ease;
+}
+
+.img-button svg {
+  height: 2rem;
 }
 
 .danger-button {
@@ -264,6 +332,10 @@ button:disabled {
 }
 
 .danger-button:hover {
+  color: #ff0000;
+}
+
+.danger-button:focus {
   color: #ff0000;
 }
 
@@ -283,7 +355,7 @@ input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 1rem;
   height: 1.5rem;
-  background: #d1d1d1;
+  background: var(--main-color);
   cursor: pointer;
   border: 0;
   border-radius: 0;
@@ -293,7 +365,7 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-thumb {
   width: 1rem;
   height: 1.5rem;
-  background: #d1d1d1;
+  background: var(--main-color);
   cursor: pointer;
   border: 0;
   border-radius: 0;
@@ -301,11 +373,33 @@ input[type="range"]::-moz-range-thumb {
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  background: #ffffff;
+  background: var(--active-color);
 }
 
 input[type="range"]::-moz-range-thumb:hover {
-  background: #ffffff;
+  background: var(--active-color);
+}
+
+input[type="range"]:focus::-webkit-slider-thumb {
+  background: var(--active-color);
+}
+
+input[type="range"]:focus::-moz-range-thumb {
+  background: var(--active-color);
+}
+
+.checkbox svg {
+  height: 2rem;
+  fill: var(--main-color);
+  transition: fill 0.2s ease;
+}
+
+.checkbox svg:hover {
+  fill: var(--active-color);
+}
+
+.checkbox:focus svg {
+  fill: var(--active-color);
 }
 
 canvas {

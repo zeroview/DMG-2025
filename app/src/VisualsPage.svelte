@@ -14,7 +14,7 @@
   }
 </script>
 
-<div class="menu-grid">
+<div class="menu-grid" tabindex="-1">
   <p>Scaling offset:</p>
   <MenuSlider bind:value={options.scaleOffset} min={-5} max={5} step={1} />
   <p>Color palette:</p>
@@ -52,7 +52,8 @@
   </button>
   <div
     class="menu-grid"
-    style={options.glowEnabled ? "" : "visibility:hidden;"}
+    style={"overflow-y: unset;" +
+      (options.glowEnabled ? "" : "visibility: hidden;")}
   >
     <p>Background strength:</p>
     <MenuSlider

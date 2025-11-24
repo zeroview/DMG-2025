@@ -278,10 +278,10 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                     Q::UpdateInput { input, pressed } => {
                         let input_option = match input.as_str() {
-                            "Right" => Some(InputFlag::RIGHT),
-                            "Left" => Some(InputFlag::LEFT),
-                            "Up" => Some(InputFlag::UP),
-                            "Down" => Some(InputFlag::DOWN),
+                            "D-Pad Right" => Some(InputFlag::RIGHT),
+                            "D-Pad Left" => Some(InputFlag::LEFT),
+                            "D-Pad Up" => Some(InputFlag::UP),
+                            "D-Pad Down" => Some(InputFlag::DOWN),
                             "A" => Some(InputFlag::A),
                             "B" => Some(InputFlag::B),
                             "Select" => Some(InputFlag::SELECT),

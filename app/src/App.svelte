@@ -166,7 +166,7 @@
   });
   input.onKeybindPressed((keybind, pressed) => {
     // Handle setting state slots 1-10
-    if (keybind.slice(0, 10) === "State slot") {
+    if (keybind.slice(0, 10) === "State slot" && pressed) {
       let slot = parseInt(keybind.slice(11));
       stateSlot = slot;
       showInfoPopup(`Selected state slot ${stateSlot}`);
@@ -200,6 +200,10 @@
         }
         break;
     }
+  });
+  input.onKeyboardFocusEnd(() => {
+    // Remove focus from element that has taken keyboard focus
+    (document.activeElement as HTMLElement)?.blur?.();
   });
 
   // Constants for transitions
@@ -259,15 +263,28 @@
       class="menu"
       transition:fade={{ duration: options.uiTransitions ? 100 : 0 }}
     >
+      {#snippet menuButton(text: string, pageIndex: number)}
+        <button
+          onclick={() => (currentPage = pageIndex)}
+          style="{currentPage === pageIndex
+            ? 'text-decoration-color: #d1d1d1;'
+            : ''}}"
+        >
+          {text}
+        </button>
+      {/snippet}
       <div class="menu-sidebar">
-        <button onclick={() => (currentPage = 0)}>MAIN</button>
-        <button onclick={() => (currentPage = 1)}>BROWSER</button>
-        <button onclick={() => (currentPage = 2)}>VISUALS</button>
-        <button onclick={() => (currentPage = 3)}>INPUT</button>
+        {@render menuButton("MAIN", 0)}
+        {@render menuButton("BROWSER", 1)}
+        {@render menuButton("VISUALS", 2)}
+        {@render menuButton("INPUT", 3)}
       </div>
       {#if currentPage == 1}
         <div class="menu-container" in:fly={getTransition()}>
-          <BrowserPage onLoadRom={loadROM} />
+          <BrowserPage
+            onLoadRom={loadROM}
+            onKeyboardFocus={(focus) => (input.keyboardFocused = focus)}
+          />
         </div>
       {:else if currentPage == 2}
         <div class="menu-container" in:fly={getTransition()}>

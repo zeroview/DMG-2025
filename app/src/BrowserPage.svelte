@@ -1,10 +1,13 @@
 <script lang="ts">
   import Fuse from "fuse.js";
+  import MenuCheckbox from "./MenuCheckbox.svelte";
   import homebrewRoms from "../roms/homebrewhub.json";
   let {
     onLoadRom,
+    onKeyboardFocus,
   }: {
     onLoadRom: (rom: ArrayBuffer, isZip: boolean) => void;
+    onKeyboardFocus: (focus: boolean) => void;
   } = $props();
   interface ROMInfo {
     developer: string;
@@ -58,22 +61,27 @@
   <div class="browser-topbar">
     <div class="browser-filters">
       <p>Filters:</p>
-      <input type="checkbox" bind:checked={games} />
+      <MenuCheckbox bind:value={games} />
       <p>Games</p>
-      <input type="checkbox" bind:checked={demos} />
+      <MenuCheckbox bind:value={demos} />
       <p>Demos</p>
-      <input type="checkbox" bind:checked={tools} />
+      <MenuCheckbox bind:value={tools} />
       <p>Tools</p>
-      <input type="checkbox" bind:checked={music} />
+      <MenuCheckbox bind:value={music} />
       <p>Music</p>
     </div>
-    <input bind:value={searchString} placeholder="Search" />
+    <input
+      bind:value={searchString}
+      placeholder="Search"
+      onfocusin={() => onKeyboardFocus(true)}
+      onfocusout={() => onKeyboardFocus(false)}
+    />
   </div>
-  <div class="browser-list">
+  <div class="browser-list" tabindex="-1">
     {#each romTitles as title}
       <div class="browser-item">
         <button
-          class="browser-img"
+          class="browser-button"
           onclick={() => load(roms[title].download_url)}
         >
           <img
@@ -81,8 +89,8 @@
             alt={title}
             loading="lazy"
           />
-          <div class="browser-img-overlay">
-            <p class="browser-img-overlay-text">▶</p>
+          <div>
+            <p>▶</p>
           </div>
         </button>
 
