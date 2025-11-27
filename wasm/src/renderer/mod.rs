@@ -189,8 +189,8 @@ impl Renderer {
         let background_png = include_bytes!("background.png");
         let background_image = image::load_from_memory(background_png).unwrap();
         let background_rgba = background_image.to_rgba8();
-        final_options.background_display_origin = [284, 261];
-        final_options.background_display_size = [599, 548];
+        final_options.background_display_origin = [447, 410];
+        final_options.background_display_size = [943, 861];
         // Initialize background texture
         let background_texture_size = wgpu::Extent3d {
             width: background_rgba.width(),
