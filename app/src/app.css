@@ -197,7 +197,7 @@ main {
   border: 3px solid var(--active-color);
 }
 
-.browser-topbar input:focus {
+.browser-topbar input:focus-visible {
   border: 3px solid var(--active-color);
 }
 
@@ -278,7 +278,7 @@ main {
   opacity: 1;
 }
 
-.browser-button:focus div {
+.browser-button:focus-visible div {
   opacity: 1;
 }
 
@@ -356,7 +356,7 @@ button:hover {
   color: var(--active-color);
 }
 
-button:focus {
+button:focus-visible {
   color: var(--active-color);
 }
 
@@ -383,7 +383,7 @@ button:disabled {
   filter: brightness(140%);
 }
 
-.img-button:focus * {
+.img-button:focus-visible * {
   filter: brightness(140%);
 }
 
@@ -406,7 +406,7 @@ button:disabled {
   color: var(--danger-active-color);
 }
 
-.danger-button:focus {
+.danger-button:focus-visible {
   color: var(--danger-active-color);
 }
 
@@ -451,11 +451,11 @@ input[type="range"]::-moz-range-thumb:hover {
   background: var(--active-color);
 }
 
-input[type="range"]:focus::-webkit-slider-thumb {
+input[type="range"]:focus-visible::-webkit-slider-thumb {
   background: var(--active-color);
 }
 
-input[type="range"]:focus::-moz-range-thumb {
+input[type="range"]:focus-visible::-moz-range-thumb {
   background: var(--active-color);
 }
 
