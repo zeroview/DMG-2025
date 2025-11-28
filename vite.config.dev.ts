@@ -13,4 +13,5 @@ export default defineConfig({
   plugins: [svelte(), topLevelAwait(), wasm(), wasmPackWatchPlugin({
     buildCommand: "wasm-pack build wasm --dev"
   })],
+  publicDir: "app/public"
 });
