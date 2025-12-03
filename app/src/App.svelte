@@ -122,6 +122,17 @@
     await db.saveRAM(loadedROMInfo.hash, ram);
   };
 
+  const loadSavedRAM = async () => {
+    // Check if RAM is saved
+    if (loadedROMInfo.saveRAM) {
+      // Get from database
+      let ram = await db.getRAM(loadedROMInfo.hash).catch(console.warn);
+      // Load into emulator if successful
+      if (ram) {
+        bridge.loadRAM(ram);
+      }
+    }
+  };
   const loadROM = async (rom: ArrayBuffer, name: string, isZip: boolean) => {
     // Try to load ROM, if fails, show popup for reason
     let info = await bridge.loadROM(rom, isZip).catch(showErrorPopup);
@@ -141,12 +152,7 @@
       .catch(() => (loadStateDisabled = true));
 
     // Load saved RAM into emulator
-    if (loadedROMInfo.saveRAM) {
-      let ram = await db.getRAM(loadedROMInfo.hash).catch(console.warn);
-      if (ram) {
-        bridge.loadRAM(ram);
-      }
-    }
+    loadSavedRAM();
 
     document.title = `${info.title} - DMG-2025`;
     console.info(
@@ -165,7 +171,10 @@
 
   const reload = async () => {
     try {
+      // Reload ROM
       await bridge.reload();
+      // Set RAM if saved
+      await loadSavedRAM();
       console.info("Reloaded ROM");
       bridge.toggle_execution();
     } catch (e) {
